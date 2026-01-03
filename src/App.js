@@ -99,9 +99,6 @@ export default function App() {
       const snap = await getDocs(tracksRef);
       if (snap.empty) {
         const samples = [
-          { title: "AI Nebula", artist: "Neural Synth", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400" },
-          { title: "Cyber Horizon", artist: "Data Pulse", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", cover: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400" },
-          { title: "Deep Thought", artist: "Logic Flow", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", cover: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=400" }
         ];
         for (const s of samples) await addDoc(tracksRef, { ...s, createdAt: serverTimestamp() });
       }
