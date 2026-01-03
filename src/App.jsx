@@ -14,13 +14,14 @@ const getEnv = (key, defaultValue) => {
 };
 
 const firebaseConfig = {
-  apiKey: getEnv("REACT_APP_FIREBASE_API_KEY", "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU"),
-  authDomain: getEnv("REACT_APP_FIREBASE_AUTH_DOMAIN", "mymusicplayer-ef8f0.firebaseapp.com"),
-  projectId: getEnv("REACT_APP_FIREBASE_PROJECT_ID", "mymusicplayer-ef8f0"),
-  storageBucket: getEnv("REACT_APP_FIREBASE_STORAGE_BUCKET", "mymusicplayer-ef8f0.firebasestorage.app"),
-  messagingSenderId: getEnv("REACT_APP_FIREBASE_MESSAGING_SENDER_ID", "305125896450"),
-  appId: getEnv("REACT_APP_FIREBASE_APP_ID", "1:305125896450:web:eb15f3650452fe442f521b"),
-  measurementId: getEnv("REACT_APP_FIREBASE_MEASUREMENT_ID", "G-4M73KXLS97")
+const firebaseConfig = {
+  apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
+  authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
+  projectId: "mymusicplayer-ef8f0",
+  storageBucket: "mymusicplayer-ef8f0.firebasestorage.app",
+  messagingSenderId: "305125896450",
+  appId: "1:305125896450:web:eb15f3650452fe442f521b",
+  measurementId: "G-4M73KXLS97"
 };
 
 // Firebase 初期化
