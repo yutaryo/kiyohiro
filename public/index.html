@@ -5,44 +5,25 @@
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#050505" />
-    <meta name="description" content="FireBeat AI - 次世代のAI搭載ミュージックプレイヤー。Firestoreと連携し、最高のリスニング体験を提供します。" />
+    <meta name="description" content="FireBeat AI - 次世代のAI搭載ミュージックプレイヤー。" />
     
-    <!-- リッチリザルト (Structured Data) -->
+    <!-- リッチリザルト -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "FireBeat AI Music Player",
+        "name": "FireBeat AI",
         "operatingSystem": "Web",
-        "applicationCategory": "MultimediaApplication",
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": "4.8",
-          "ratingCount": "1024"
-        },
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "JPY"
-        }
+        "applicationCategory": "MultimediaApplication"
       }
     </script>
 
-    <!-- ネットワーク依存関係の最適化 (Preconnect) -->
+    <!-- Preconnect: 接続確立を早める -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" />
-    <link rel="preconnect" href="https://www.gstatic.com" />
 
-    <!-- LCPリソースの優先度上げ (fetchpriority="high") -->
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
-      fetchpriority="high"
-    />
-    
-    <!-- Google Fonts の非同期読み込み -->
+    <!-- Google Fonts: 非同期読み込み (media="print" トリック) -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
@@ -50,50 +31,49 @@
       onload="this.media='all'"
     />
 
-    <!-- Tailwind CSS (fetchpriorityを追加し初期レンダリングを高速化) -->
-    <script src="https://cdn.tailwindcss.com" fetchpriority="high"></script>
+    <!-- Tailwind CSS: deferを付けて実行を遅らせ、描画ブロックを回避 -->
+    <script src="https://cdn.tailwindcss.com" defer fetchpriority="high"></script>
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
+      window.addEventListener('load', () => {
+        tailwind.config = {
+          theme: {
+            extend: {
+              fontFamily: { sans: ['Inter', 'sans-serif'] },
+            }
           }
         }
-      }
+      });
     </script>
 
     <style>
+      /* JS読み込み前の「真っ白」を防ぐクリティカルCSS */
       body {
         background-color: #050505;
         margin: 0;
-        color: #ffffff; /* コントラスト確保 */
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        color: #ffffff;
+        font-family: sans-serif;
       }
-      #root:empty {
+      #root {
         display: flex;
         align-items: center;
         justify-content: center;
         height: 100vh;
       }
-      /* ローディング時のコントラスト配慮 */
-      .loading-skeleton {
-        background-color: #1a1a1a;
+      .initial-loader {
+        text-align: center;
+        animation: fadein 1s ease-in;
       }
+      @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
     </style>
     
-    <title>FireBeat AI | Next-Gen Music Experience</title>
+    <title>FireBeat AI</title>
   </head>
   <body>
-    <noscript>このアプリを実行するには JavaScript を有効にする必要があります。</noscript>
-    
     <div id="root">
-      <!-- LCP改善のためのスケルトン表示 -->
-      <div class="flex flex-col items-center">
-        <div class="w-16 h-16 bg-zinc-800 rounded-2xl mb-4 animate-pulse"></div>
-        <div class="w-32 h-2 bg-zinc-700 rounded animate-pulse"></div>
+      <!-- ユーザーが最初に目にするスケルトン (LCP対応) -->
+      <div class="initial-loader">
+        <div style="width: 40px; height: 40px; background: #4f46e5; border-radius: 10px; margin: 0 auto 20px;"></div>
+        <div style="width: 100px; height: 4px; background: #27272a; border-radius: 2px;"></div>
       </div>
     </div>
   </body>
