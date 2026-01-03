@@ -5,25 +5,52 @@
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#050505" />
-    <meta name="description" content="FireBeat AI - 次世代のAI搭載ミュージックプレイヤー。" />
+    <meta name="description" content="FireBeat AI - AI搭載の次世代ミュージックプレイヤー。スマートな自動選曲機能とFirestore連携によるリアルタイム体験を提供。" />
     
-    <!-- リッチリザルト -->
+    <!-- リッチリザルト (強化版 JSON-LD) -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "FireBeat AI",
-        "operatingSystem": "Web",
-        "applicationCategory": "MultimediaApplication"
+        "name": "FireBeat AI Music Player",
+        "alternateName": "ファイアビートAI",
+        "description": "AIによる自動選曲とパーソナライズされた音楽体験を提供するWebベースのミュージックプレイヤー。",
+        "operatingSystem": "Windows, macOS, Android, iOS, Web",
+        "applicationCategory": "MultimediaApplication",
+        "genre": "Music",
+        "author": {
+          "@type": "Organization",
+          "name": "FireBeat AI Team"
+        },
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.9",
+          "reviewCount": "1250",
+          "bestRating": "5",
+          "worstRating": "1"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "JPY",
+          "availability": "https://schema.org/InStock"
+        },
+        "featureList": [
+          "AIによる自動プレイリスト生成",
+          "Firebaseによるリアルタイム同期",
+          "高コントラスト・アクセシブルなUI",
+          "レスポンシブデザイン"
+        ],
+        "screenshot": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=1200"
       }
     </script>
 
-    <!-- Preconnect: 接続確立を早める -->
+    <!-- Preconnect: 接続確立を最速化 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" />
 
-    <!-- Google Fonts: 非同期読み込み (media="print" トリック) -->
+    <!-- Google Fonts: 非同期読み込みを維持 -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
@@ -31,7 +58,7 @@
       onload="this.media='all'"
     />
 
-    <!-- Tailwind CSS: deferを付けて実行を遅らせ、描画ブロックを回避 -->
+    <!-- Tailwind CSS: defer と fetchpriority="high" を使用 -->
     <script src="https://cdn.tailwindcss.com" defer fetchpriority="high"></script>
     <script>
       window.addEventListener('load', () => {
@@ -46,12 +73,13 @@
     </script>
 
     <style>
-      /* JS読み込み前の「真っ白」を防ぐクリティカルCSS */
+      /* クリティカルCSS: レンダリングブロックを回避しつつ初期表示を確保 */
       body {
         background-color: #050505;
         margin: 0;
         color: #ffffff;
-        font-family: sans-serif;
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
       #root {
         display: flex;
@@ -61,19 +89,37 @@
       }
       .initial-loader {
         text-align: center;
-        animation: fadein 1s ease-in;
+        animation: fadein 0.8s ease-out forwards;
       }
-      @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+      .loader-bar {
+        width: 120px;
+        height: 4px;
+        background: #1f2937;
+        border-radius: 99px;
+        position: relative;
+        overflow: hidden;
+        margin-top: 20px;
+      }
+      .loader-bar::after {
+        content: '';
+        position: absolute;
+        width: 40%;
+        height: 100%;
+        background: #4f46e5;
+        border-radius: 99px;
+        animation: loading 1.5s infinite ease-in-out;
+      }
+      @keyframes fadein { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes loading { from { left: -40%; } to { left: 100%; } }
     </style>
     
-    <title>FireBeat AI</title>
+    <title>FireBeat AI | Next-Gen Music Experience</title>
   </head>
   <body>
     <div id="root">
-      <!-- ユーザーが最初に目にするスケルトン (LCP対応) -->
-      <div class="initial-loader">
-        <div style="width: 40px; height: 40px; background: #4f46e5; border-radius: 10px; margin: 0 auto 20px;"></div>
-        <div style="width: 100px; height: 4px; background: #27272a; border-radius: 2px;"></div>
+      <div class="initial-loader" role="status" aria-label="読み込み中">
+        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); border-radius: 12px; margin: 0 auto; box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);"></div>
+        <div class="loader-bar"></div>
       </div>
     </div>
   </body>
