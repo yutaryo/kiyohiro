@@ -14,7 +14,6 @@ const getEnv = (key, defaultValue) => {
 };
 
 const firebaseConfig = {
-const firebaseConfig = {
   apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
   authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
   projectId: "mymusicplayer-ef8f0",
