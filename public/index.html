@@ -34,24 +34,24 @@
     <link rel="preconnect" href="https://cdn.tailwindcss.com" />
     <link rel="preconnect" href="https://www.gstatic.com" />
 
-    <!-- Google Fonts の非同期読み込み (レンダリングブロック回避) -->
+    <!-- LCPリソースの優先度上げ (fetchpriority="high") -->
     <link
       rel="preload"
       as="style"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
+      fetchpriority="high"
     />
+    
+    <!-- Google Fonts の非同期読み込み -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
       media="print"
       onload="this.media='all'"
     />
-    <noscript>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" />
-    </noscript>
 
-    <!-- Tailwind CSS (開発用CDNだが、レンダリング順序を考慮) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (fetchpriorityを追加し初期レンダリングを高速化) -->
+    <script src="https://cdn.tailwindcss.com" fetchpriority="high"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -64,12 +64,11 @@
       }
     </script>
 
-    <!-- 効率的なキャッシュのためのスタイル調整 -->
     <style>
-      /* 初期表示時のチラつき(FOUC)防止用の最小限のCSS */
       body {
         background-color: #050505;
         margin: 0;
+        color: #ffffff; /* コントラスト確保 */
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
@@ -78,7 +77,10 @@
         align-items: center;
         justify-content: center;
         height: 100vh;
-        color: #444;
+      }
+      /* ローディング時のコントラスト配慮 */
+      .loading-skeleton {
+        background-color: #1a1a1a;
       }
     </style>
     
@@ -87,17 +89,12 @@
   <body>
     <noscript>このアプリを実行するには JavaScript を有効にする必要があります。</noscript>
     
-    <!-- 初期ローディングスケルトン (LCP改善) -->
     <div id="root">
-      <div className="animate-pulse flex flex-col items-center">
-        <div className="w-16 h-16 bg-zinc-800 rounded-2xl mb-4"></div>
-        <div className="w-32 h-2 bg-zinc-800 rounded"></div>
+      <!-- LCP改善のためのスケルトン表示 -->
+      <div class="flex flex-col items-center">
+        <div class="w-16 h-16 bg-zinc-800 rounded-2xl mb-4 animate-pulse"></div>
+        <div class="w-32 h-2 bg-zinc-700 rounded animate-pulse"></div>
       </div>
     </div>
-
-    <!-- 
-      ネットワーク依存関係ツリーの末尾で実行
-      Vercel等でのビルド時にここにJSファイルが注入されます 
-    -->
   </body>
 </html>
