@@ -6,7 +6,6 @@ import { Play, Pause, SkipBack, SkipForward, Volume2, Search, Home, Library, Zap
 
 /**
  * Firebase Configuration
- * 環境変数またはデフォルト値を使用
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
@@ -17,7 +16,7 @@ const firebaseConfig = {
   appId: "1:305125896450:web:eb15f3650452fe442f521b"
 };
 
-// シングルトンとして初期化（レンダリングブロック回避のため外で定義）
+// シングルトン初期化
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -34,9 +33,6 @@ export default function App() {
   
   const audioRef = useRef(new Audio());
 
-  /**
-   * 再生・一時停止のトグル制御 (アクセシビリティ考慮)
-   */
   const handleTrackSelect = useCallback((track) => {
     if (currentTrack?.id === track.id) {
       setIsPlaying(prev => !prev);
@@ -49,14 +45,16 @@ export default function App() {
   const handleNext = useCallback(() => {
     if (tracks.length === 0) return;
     const idx = tracks.findIndex(t => t.id === currentTrack?.id);
-    setCurrentTrack(tracks[(idx + 1) % tracks.length]);
+    const nextIdx = (idx + 1) % tracks.length;
+    setCurrentTrack(tracks[nextIdx]);
     setIsPlaying(true);
   }, [tracks, currentTrack]);
 
   const handlePrev = useCallback(() => {
     if (tracks.length === 0) return;
     const idx = tracks.findIndex(t => t.id === currentTrack?.id);
-    setCurrentTrack(tracks[(idx - 1 + tracks.length) % tracks.length]);
+    const prevIdx = (idx - 1 + tracks.length) % tracks.length;
+    setCurrentTrack(tracks[prevIdx]);
     setIsPlaying(true);
   }, [tracks, currentTrack]);
 
@@ -69,54 +67,92 @@ export default function App() {
   };
 
   /**
-   * 認証フロー (ネットワーク依存関係の最適化)
+   * 認証フローの修正: トークンエラー時のフォールバックを強化
    */
   useEffect(() => {
     const performAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+        // __initial_auth_token が存在し、かつ有効な形式であることを確認
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token && __initial_auth_token !== "") {
+          try {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (tokenError) {
+            // トークンの不一致 (mismatch) や期限切れの場合は匿名認証へ
+            console.warn("Custom token failed, falling back to anonymous auth:", tokenError.message);
+            await signInAnonymously(auth);
+          }
         } else {
           await signInAnonymously(auth);
         }
       } catch (error) {
-        console.error("Auth error:", error);
+        console.error("Critical Auth error:", error);
       }
     };
+
     performAuth();
-    return onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) {
+        // 万が一ログアウト状態になった場合の再認証
+        signInAnonymously(auth);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   /**
-   * Firestoreデータ購読
+   * Firestoreデータ購読 (RULE 3: Authの完了を待機)
    */
   useEffect(() => {
     if (!user) return;
+    
+    // パスルール (RULE 1) に従ったコレクション参照
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     
-    // データがない場合のシード投入
-    const ensureData = async () => {
-      const snap = await getDocs(tracksRef);
-      if (snap.empty) {
-        const samples = [
-          { title: "AI Nebula", artist: "Neural Synth", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400" },
-          { title: "Cyber Horizon", artist: "Data Pulse", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", cover: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400" }
-        ];
-        for (const s of samples) await addDoc(tracksRef, { ...s, createdAt: serverTimestamp() });
+    const ensureDataAndSubscribe = async () => {
+      try {
+        const snap = await getDocs(tracksRef);
+        if (snap.empty) {
+          const samples = [
+            { title: "AI Nebula", artist: "Neural Synth", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400" },
+            { title: "Cyber Horizon", artist: "Data Pulse", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", cover: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400" }
+          ];
+          for (const s of samples) {
+            await addDoc(tracksRef, { ...s, createdAt: serverTimestamp() });
+          }
+        }
+      } catch (e) {
+        console.error("Data seeding error:", e);
       }
-    };
-    ensureData();
 
-    return onSnapshot(query(tracksRef), (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setTracks(data);
-      setLoading(false);
-      if (data.length > 0 && !currentTrack) setCurrentTrack(data[0]);
-    }, () => setLoading(false));
+      // 購読開始 (RULE 2: シンプルなクエリを使用)
+      const unsubscribe = onSnapshot(query(tracksRef), (snap) => {
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // JSメモリ内でソート (インデックスエラー回避)
+        const sortedData = data.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+        
+        setTracks(sortedData);
+        setLoading(false);
+        if (sortedData.length > 0 && !currentTrack) {
+          setCurrentTrack(sortedData[0]);
+        }
+      }, (err) => {
+        console.error("Firestore Snapshot Error:", err);
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    };
+
+    const unsubPromise = ensureDataAndSubscribe();
+    return () => {
+      unsubPromise.then(unsub => unsub && typeof unsub === 'function' && unsub());
+    };
   }, [user, currentTrack]);
 
   /**
-   * オーディオ再生同期
+   * オーディオ同期
    */
   useEffect(() => {
     const audio = audioRef.current;
@@ -132,7 +168,11 @@ export default function App() {
 
   useEffect(() => {
     const audio = audioRef.current;
-    const updateProgress = () => audio.duration && setProgress((audio.currentTime / audio.duration) * 100);
+    const updateProgress = () => {
+      if (audio.duration) {
+        setProgress((audio.currentTime / audio.duration) * 100);
+      }
+    };
     audio.addEventListener('timeupdate', updateProgress);
     audio.addEventListener('ended', handleNext);
     return () => {
@@ -145,22 +185,23 @@ export default function App() {
     audioRef.current.volume = volume;
   }, [volume]);
 
-  // 初回ロード中のスケルトン表示 (CLS対策)
   if (loading && !tracks.length) {
     return (
       <div className="h-screen bg-[#050505] flex flex-col items-center justify-center space-y-4">
-        <div className="w-16 h-16 bg-zinc-800 rounded-2xl animate-pulse" />
-        <div className="w-32 h-2 bg-zinc-800 rounded animate-pulse" />
+        <div className="w-16 h-16 bg-indigo-600/20 rounded-2xl animate-pulse flex items-center justify-center">
+          <Zap size={32} className="text-indigo-500 animate-bounce" />
+        </div>
+        <div className="text-zinc-500 font-bold text-xs uppercase tracking-widest animate-pulse">Initializing Engine...</div>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-[#050505] text-white font-sans overflow-hidden">
-      {/* Sidebar - アクセシブルなナビゲーション */}
+      {/* Sidebar */}
       <aside className="w-64 bg-black border-r border-zinc-800 p-6 hidden lg:flex flex-col shadow-2xl">
         <div className="flex items-center gap-3 mb-12">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Zap size={24} className="text-white" fill="white" />
           </div>
           <span className="text-xl font-black italic tracking-tighter">FIREBEAT<span className="text-indigo-400">AI</span></span>
@@ -182,7 +223,7 @@ export default function App() {
               id="search-input"
               type="text" 
               placeholder="アーティスト、楽曲..." 
-              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-white placeholder-zinc-500"
             />
           </div>
         </header>
@@ -203,7 +244,7 @@ export default function App() {
                   aria-label={`${track.title} by ${track.artist} を再生`}
                   className={`group p-4 rounded-[2rem] transition-all duration-500 text-left border ${currentTrack?.id === track.id ? 'bg-indigo-600/10 border-indigo-500 shadow-lg shadow-indigo-500/5' : 'bg-zinc-900/20 border-transparent hover:bg-zinc-900/40 hover:border-zinc-800'}`}
                 >
-                  <div className="relative aspect-square mb-4 overflow-hidden rounded-[1.5rem] bg-zinc-800">
+                  <div className="relative aspect-square mb-4 overflow-hidden rounded-[1.5rem] bg-zinc-800 shadow-inner">
                     <img 
                       src={track.cover} 
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
@@ -226,7 +267,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Player Bar - 高コントラスト・アクセシビリティ対応 */}
+      {/* Player Bar */}
       <footer className="fixed bottom-0 left-0 right-0 h-32 bg-black/95 backdrop-blur-xl border-t border-zinc-800 px-8 flex items-center justify-between z-50">
         <div className="flex items-center gap-5 w-1/3">
           {currentTrack && (
@@ -248,7 +289,7 @@ export default function App() {
             <button 
               onClick={() => setIsPlaying(!isPlaying)} 
               aria-label={isPlaying ? "一時停止" : "再生"}
-              className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-all shadow-lg"
+              className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-all shadow-lg shadow-white/10"
             >
               {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" className="ml-1" />}
             </button>
@@ -293,7 +334,6 @@ export default function App() {
 function NavItem({ icon, label, active = false }) {
   return (
     <button 
-      aria-label={label}
       className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${active ? 'bg-indigo-600/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
     >
       <span className={active ? 'text-indigo-400' : ''}>{icon}</span>
