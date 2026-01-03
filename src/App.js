@@ -1,418 +1,291 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, query, serverTimestamp } from 'firebase/firestore';
-import { Play, Pause, SkipForward, SkipBack, Music, Plus, Trash2, Volume2, ListMusic, Disc, AlertCircle } from 'lucide-react';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, addDoc, serverTimestamp, deleteDoc, getDocs } from 'firebase/firestore';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Heart, Search, Home, Library, AlertCircle, RefreshCcw } from 'lucide-react';
 
-// --- Firebase Configuration ---
-// 提供された設定をベースにし、プレビュー環境のフォールバックを組み込みます
-let firebaseConfig = {
-  apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
-  authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
-  projectId: "mymusicplayer-ef8f0",
-  storageBucket: "mymusicplayer-ef8f0.firebasestorage.app",
-  messagingSenderId: "305125896450",
-  appId: "1:305125896450:web:eb15f3650452fe442f521b",
-  measurementId: "G-4M73KXLS97"
+// --- Firebase 設定 ---
+// process.env が存在しない環境（ブラウザ直実行）でのエラーを回避するための安全な取得処理
+const getEnv = (key, defaultValue) => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  return defaultValue;
 };
 
-// プレビュー環境用の自動フォールバック（APIキーがプレースホルダーの場合など）
-if (typeof __firebase_config !== 'undefined') {
-  try {
-    const envConfig = JSON.parse(__firebase_config);
-    if (envConfig && envConfig.apiKey) {
-      firebaseConfig = envConfig;
-    }
-  } catch (e) {
-    console.error("Firebase config parse error:", e);
-  }
-}
+const firebaseConfig = {
+  apiKey: getEnv("REACT_APP_FIREBASE_API_KEY", "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU"),
+  authDomain: getEnv("REACT_APP_FIREBASE_AUTH_DOMAIN", "mymusicplayer-ef8f0.firebaseapp.com"),
+  projectId: getEnv("REACT_APP_FIREBASE_PROJECT_ID", "mymusicplayer-ef8f0"),
+  storageBucket: getEnv("REACT_APP_FIREBASE_STORAGE_BUCKET", "mymusicplayer-ef8f0.firebasestorage.app"),
+  messagingSenderId: getEnv("REACT_APP_FIREBASE_MESSAGING_SENDER_ID", "305125896450"),
+  appId: getEnv("REACT_APP_FIREBASE_APP_ID", "1:305125896450:web:eb15f3650452fe442f521b"),
+  measurementId: getEnv("REACT_APP_FIREBASE_MEASUREMENT_ID", "G-4M73KXLS97")
+};
 
-// 唯一の初期化
+// Firebase 初期化
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// アプリケーションIDの特定
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'music-player-app';
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [songs, setSongs] = useState([]);
-  const [currentSongIndex, setCurrentSongIndex] = useState(0);
+  const [tracks, setTracks] = useState([]);
+  const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newSong, setNewSong] = useState({ title: '', artist: '', url: '', cover: '' });
-  const [authError, setAuthError] = useState(null);
+  const [volume, setVolume] = useState(0.7);
+  const [errorLog, setErrorLog] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  const audioRef = useRef(new Audio());
 
-  const audioRef = useRef(null);
-
-  // --- Auth & Firestore Setup ---
+  // 1. 認証処理
   useEffect(() => {
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+          try {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (e) {
+            console.warn("Token mismatch, falling back to anonymous...");
+            await signInAnonymously(auth);
+          }
         } else {
           await signInAnonymously(auth);
         }
-        setAuthError(null);
       } catch (error) {
-        console.error("Auth error:", error);
-        setAuthError(error.message);
+        setErrorLog("認証エラー: " + error.message);
       }
     };
     initAuth();
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (userData) => {
-      setUser(userData);
-    });
-
-    return () => unsubscribeAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
   }, []);
 
+  // 2. Firestore同期 ＋ 自動修復機能
   useEffect(() => {
     if (!user) return;
 
-    // Fetch songs from public collection
-    // RULE 1: /artifacts/{appId}/public/data/{collectionName}
-    const songsCol = collection(db, 'artifacts', appId, 'public', 'data', 'songs');
-    const unsubscribeSongs = onSnapshot(songsCol, 
-      (snapshot) => {
-        const songsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // JavaScript memory sort (RULE 2: No complex queries)
-        setSongs(songsList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-      },
-      (error) => {
-        console.error("Firestore error:", error);
+    const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
+    
+    const ensureInitialData = async () => {
+      try {
+        const snapshot = await getDocs(tracksRef);
+        if (snapshot.empty) {
+          await addDoc(tracksRef, {
+            title: "Sample Song (SoundHelix)",
+            artist: "SoundHelix Official",
+            url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+            cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&h=300&fit=crop",
+            createdAt: serverTimestamp()
+          });
+        }
+      } catch (e) {
+        console.error("Auto-fix failed:", e);
       }
-    );
+    };
 
-    return () => unsubscribeSongs();
+    ensureInitialData();
+
+    const unsubscribeTracks = onSnapshot(query(tracksRef), (snapshot) => {
+      const trackData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTracks(trackData);
+      setLoading(false);
+      if (trackData.length > 0 && !currentTrack) {
+        setCurrentTrack(trackData[0]);
+      }
+    }, (err) => {
+      setErrorLog("Firestore読み込み失敗: " + err.message);
+      setLoading(false);
+    });
+
+    return () => unsubscribeTracks();
   }, [user]);
 
-  // --- Audio Logic ---
-  const currentSong = songs[currentSongIndex];
-
-  useEffect(() => {
-    if (isPlaying && audioRef.current && currentSong) {
-      audioRef.current.play().catch(e => {
-        console.error("Playback error:", e);
-        setIsPlaying(false);
-      });
-    } else if (audioRef.current) {
-      audioRef.current.pause();
-    }
-  }, [isPlaying, currentSongIndex, currentSong]);
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      const current = audioRef.current.currentTime;
-      const total = audioRef.current.duration || 0;
-      setProgress(total > 0 ? (current / total) * 100 : 0);
-      setDuration(total);
-    }
-  };
-
-  const handleSeek = (e) => {
-    const val = parseFloat(e.target.value);
-    if (audioRef.current && audioRef.current.duration) {
-      audioRef.current.currentTime = (val / 100) * audioRef.current.duration;
-      setProgress(val);
-    }
-  };
-
+  // 3. 再生制御
   const handleNext = () => {
-    if (songs.length === 0) return;
-    setCurrentSongIndex((prev) => (prev + 1) % songs.length);
+    if (tracks.length === 0) return;
+    const currentIndex = tracks.findIndex(t => t.id === currentTrack?.id);
+    const nextIndex = (currentIndex + 1) % tracks.length;
+    setCurrentTrack(tracks[nextIndex]);
+    setIsPlaying(true);
   };
 
   const handlePrev = () => {
-    if (songs.length === 0) return;
-    setCurrentSongIndex((prev) => (prev - 1 + songs.length) % songs.length);
+    if (tracks.length === 0) return;
+    const currentIndex = tracks.findIndex(t => t.id === currentTrack?.id);
+    const prevIndex = (currentIndex - 1 + tracks.length) % tracks.length;
+    setCurrentTrack(tracks[prevIndex]);
+    setIsPlaying(true);
   };
 
-  // --- Database Operations ---
-  const addSong = async (e) => {
-    e.preventDefault();
-    if (!user) return;
-    try {
-      const songsCol = collection(db, 'artifacts', appId, 'public', 'data', 'songs');
-      await addDoc(songsCol, {
-        ...newSong,
-        createdAt: serverTimestamp(),
-        userId: user.uid
-      });
-      setNewSong({ title: '', artist: '', url: '', cover: '' });
-      setShowAddModal(false);
-    } catch (error) {
-      console.error("Error adding song:", error);
+  useEffect(() => {
+    if (currentTrack && currentTrack.url) {
+      audioRef.current.src = currentTrack.url;
+      if (isPlaying) {
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.error("Playback failed:", e));
+        }
+      }
     }
-  };
+  }, [currentTrack, isPlaying]);
 
-  const deleteSong = async (id) => {
-    if (!user) return;
-    try {
-      const songDoc = doc(db, 'artifacts', appId, 'public', 'data', 'songs', id);
-      await deleteDoc(songDoc);
-    } catch (error) {
-      console.error("Error deleting song:", error);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (isPlaying) {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
+    } else {
+      audio.pause();
     }
-  };
+  }, [isPlaying]);
 
-  if (authError) {
-    return (
-      <div className="flex flex-col h-screen items-center justify-center bg-slate-900 text-white p-6 text-center">
-        <AlertCircle size={48} className="text-red-500 mb-4" />
-        <h2 className="text-xl font-bold mb-2">Firebase設定エラー</h2>
-        <p className="text-slate-400 mb-6 max-w-md">{authError}</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const audio = audioRef.current;
+    const updateProgress = () => {
+      if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
+    };
+    audio.addEventListener('timeupdate', updateProgress);
+    audio.addEventListener('ended', handleNext);
+    return () => {
+      audio.removeEventListener('timeupdate', updateProgress);
+      audio.removeEventListener('ended', handleNext);
+    };
+  }, [tracks, currentTrack]);
 
-  if (!user) return (
-    <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-indigo-500"></div>
-    </div>
-  );
+  useEffect(() => {
+    audioRef.current.volume = volume;
+  }, [volume]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-32">
-      {/* Header */}
-      <header className="p-6 flex justify-between items-center border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <Disc className="text-indigo-500 animate-spin-slow" size={32} />
-          <h1 className="text-2xl font-bold tracking-tight">Cloud<span className="text-indigo-500">Player</span></h1>
+    <div className="flex h-screen bg-neutral-950 text-white font-sans overflow-hidden">
+      <aside className="w-64 bg-black p-6 flex flex-col gap-8 hidden md:flex border-r border-neutral-800">
+        <div className="flex items-center gap-2 text-indigo-500 font-bold text-2xl">
+          <Music size={32} />
+          <span>FireBeat</span>
         </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-full flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20"
-        >
-          <Plus size={18} /> 曲を追加
-        </button>
-      </header>
+        <nav className="flex flex-col gap-4 text-sm text-neutral-400">
+          <NavItem icon={<Home size={20} />} label="ホーム" active />
+          <NavItem icon={<Search size={20} />} label="検索" />
+          <NavItem icon={<Library size={20} />} label="ライブラリ" />
+        </nav>
+      </aside>
 
-      <main className="max-w-4xl mx-auto p-6">
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <ListMusic size={20} className="text-indigo-400" /> 
-            プレイリスト ({songs.length})
-          </h2>
-          
-          {songs.length === 0 ? (
-            <div className="bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
-              <Music size={48} className="mx-auto mb-4 opacity-20" />
-              <p>曲がありません。右上のボタンから追加してください。</p>
+      <main className="flex-1 overflow-y-auto bg-gradient-to-b from-neutral-900 to-black p-8 pb-32">
+        <header className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-bold italic tracking-tighter">Firestore Music</h1>
+          <div className="px-4 py-2 bg-neutral-800 rounded-full text-[10px] font-mono text-neutral-400 border border-neutral-700">
+            {user ? `Authenticated` : 'Connecting...'}
+          </div>
+        </header>
+
+        {errorLog && (
+          <div className="mb-8 p-4 bg-red-900/30 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-200 text-sm">
+            <AlertCircle size={20} />
+            <p>{errorLog}</p>
+          </div>
+        )}
+
+        <section>
+          <div className="flex justify-between items-end mb-6">
+            <h2 className="text-xl font-bold">あなたのライブラリ</h2>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="text-xs text-neutral-500 hover:text-white flex items-center gap-1 transition"
+            >
+              <RefreshCcw size={12} /> 更新
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
+            </div>
+          ) : tracks.length === 0 ? (
+            <div className="py-20 text-center border-2 border-dashed border-neutral-800 rounded-3xl bg-neutral-900/20">
+              <Music size={48} className="mx-auto mb-4 text-neutral-800" />
+              <p className="text-neutral-400 text-sm">曲データが見つかりません。</p>
             </div>
           ) : (
-            <div className="grid gap-3">
-              {songs.map((song, index) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {tracks.map(track => (
                 <div 
-                  key={song.id}
-                  className={`group flex items-center justify-between p-3 rounded-lg transition-all cursor-pointer ${
-                    index === currentSongIndex 
-                      ? 'bg-indigo-600/20 border border-indigo-500/30' 
-                      : 'bg-slate-900 hover:bg-slate-800'
-                  }`}
-                  onClick={() => {
-                    setCurrentSongIndex(index);
-                    setIsPlaying(true);
-                  }}
+                  key={track.id} 
+                  onClick={() => { setCurrentTrack(track); setIsPlaying(true); }}
+                  className={`group p-4 rounded-2xl transition-all cursor-pointer relative ${currentTrack?.id === track.id ? 'bg-indigo-600/20 ring-1 ring-indigo-500 shadow-lg shadow-indigo-500/10' : 'bg-neutral-900/50 hover:bg-neutral-800'}`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded bg-slate-800 flex items-center justify-center overflow-hidden">
-                      {song.cover ? (
-                        <img src={song.cover} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <Music className="text-slate-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className={`font-medium ${index === currentSongIndex ? 'text-indigo-400' : ''}`}>{song.title}</p>
-                      <p className="text-sm text-slate-400">{song.artist}</p>
+                  <div className="relative aspect-square mb-4 overflow-hidden rounded-xl bg-neutral-800 flex items-center justify-center shadow-lg">
+                    {track.cover ? <img src={track.cover} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" alt={track.title} /> : <Music className="text-neutral-700" />}
+                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} />}
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSong(song.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-slate-500 hover:text-red-400 transition-opacity"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                    {index === currentSongIndex && isPlaying && (
-                      <div className="flex gap-1">
-                        <div className="w-1 h-4 bg-indigo-500 animate-pulse"></div>
-                        <div className="w-1 h-4 bg-indigo-500 animate-pulse delay-75"></div>
-                        <div className="w-1 h-4 bg-indigo-500 animate-pulse delay-150"></div>
-                      </div>
-                    )}
-                  </div>
+                  <h3 className="font-bold truncate text-sm">{track.title || "Untitled"}</h3>
+                  <p className="text-xs text-neutral-400 truncate mt-1">{track.artist || "Unknown Artist"}</p>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
       </main>
 
-      {/* Persistent Player Controls */}
-      {currentSong && (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-xl border-t border-white/5 p-4 z-20 shadow-2xl">
-          <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-4 md:gap-8">
-            
-            <div className="flex items-center gap-4 w-full md:w-1/4">
-              <div className="w-14 h-14 rounded-lg bg-indigo-900/50 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
-                 {currentSong.cover ? (
-                   <img src={currentSong.cover} alt="" className="w-full h-full object-cover" />
-                 ) : (
-                   <Music className="text-indigo-400" />
-                 )}
+      <footer className="fixed bottom-0 left-0 right-0 h-24 bg-black/90 backdrop-blur-xl border-t border-neutral-800 px-6 flex items-center justify-between z-50">
+        <div className="flex items-center gap-4 w-1/4">
+          {currentTrack && (
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded bg-neutral-800 overflow-hidden shadow-inner border border-neutral-700 flex-shrink-0">
+                {currentTrack.cover && <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />}
               </div>
               <div className="overflow-hidden">
-                <p className="font-bold truncate">{currentSong.title}</p>
-                <p className="text-xs text-slate-400 truncate">{currentSong.artist}</p>
+                <p className="text-xs font-bold truncate">{currentTrack.title}</p>
+                <p className="text-[10px] text-neutral-500 truncate">{currentTrack.artist}</p>
               </div>
             </div>
+          )}
+        </div>
 
-            <div className="flex flex-col items-center flex-grow w-full md:w-auto">
-              <div className="flex items-center gap-6 mb-2">
-                <button onClick={handlePrev} className="text-slate-400 hover:text-white transition-colors">
-                  <SkipBack fill="currentColor" size={24} />
-                </button>
-                <button 
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform"
-                >
-                  {isPlaying ? <Pause fill="black" size={24} /> : <Play className="ml-1" fill="black" size={24} />}
-                </button>
-                <button onClick={handleNext} className="text-slate-400 hover:text-white transition-colors">
-                  <SkipForward fill="currentColor" size={24} />
-                </button>
-              </div>
-              
-              <div className="flex items-center gap-3 w-full max-w-xl">
-                <span className="text-[10px] text-slate-500 w-10 text-right">
-                  {formatTime(audioRef.current?.currentTime || 0)}
-                </span>
-                <input 
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={progress}
-                  onChange={handleSeek}
-                  className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-                <span className="text-[10px] text-slate-500 w-10">
-                  {formatTime(duration)}
-                </span>
-              </div>
-            </div>
-
-            <div className="hidden md:flex items-center justify-end gap-3 w-1/4">
-              <Volume2 size={20} className="text-slate-400" />
-              <div className="w-24 h-1 bg-slate-700 rounded-full">
-                <div className="w-2/3 h-full bg-slate-400 rounded-full"></div>
-              </div>
-            </div>
-
-            <audio 
-              ref={audioRef}
-              src={currentSong.url}
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={handleNext}
-              className="hidden"
-            />
+        <div className="flex flex-col items-center gap-2 flex-1 max-w-xl">
+          <div className="flex items-center gap-6">
+            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-colors"><SkipBack size={20} /></button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition active:scale-95 shadow-lg">
+              {isPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-1" />}
+            </button>
+            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-colors"><SkipForward size={20} /></button>
+          </div>
+          <div className="w-full bg-neutral-800 h-1 rounded-full overflow-hidden mt-1">
+            <div className="bg-indigo-500 h-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
         </div>
-      )}
 
-      {/* Add Song Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-xl font-bold mb-6">新しい曲を追加</h3>
-            <form onSubmit={addSong} className="space-y-4">
-              <div>
-                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">タイトル</label>
-                <input 
-                  required
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="曲名を入力"
-                  value={newSong.title}
-                  onChange={(e) => setNewSong({...newSong, title: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">アーティスト</label>
-                <input 
-                  required
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="アーティスト名を入力"
-                  value={newSong.artist}
-                  onChange={(e) => setNewSong({...newSong, artist: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">音源URL (.mp3)</label>
-                <input 
-                  required
-                  type="url"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="https://example.com/song.mp3"
-                  value={newSong.url}
-                  onChange={(e) => setNewSong({...newSong, url: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">カバー画像URL (任意)</label>
-                <input 
-                  type="url"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="https://images.com/cover.jpg"
-                  value={newSong.cover}
-                  onChange={(e) => setNewSong({...newSong, cover: e.target.value})}
-                />
-              </div>
-              
-              <div className="flex gap-3 pt-4">
-                <button 
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-xl transition-colors"
-                >
-                  キャンセル
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold transition-colors"
-                >
-                  保存
-                </button>
-              </div>
-            </form>
-          </div>
+        <div className="w-1/4 flex justify-end items-center gap-3">
+          <Volume2 size={16} className="text-neutral-500" />
+          <input 
+            type="range" 
+            min="0" 
+            max="1" 
+            step="0.01" 
+            value={volume} 
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-20 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-white" 
+          />
         </div>
-      )}
-
-      <style>{`
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-slow {
-          animation: spin-slow 8s linear infinite;
-        }
-      `}</style>
+      </footer>
     </div>
   );
 }
 
-function formatTime(seconds) {
-  if (isNaN(seconds)) return "0:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+function NavItem({ icon, label, active = false }) {
+  return (
+    <div className={`flex items-center gap-4 cursor-pointer transition ${active ? 'text-white' : 'hover:text-white'}`}>
+      {icon}
+      <span className="font-medium">{label}</span>
+    </div>
+  );
 }
