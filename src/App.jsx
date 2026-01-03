@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, addDoc, serverTimestamp, deleteDoc, getDocs } from 'firebase/firestore';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Heart, Search, Home, Library, AlertCircle, RefreshCcw } from 'lucide-react';
@@ -25,6 +26,7 @@ const firebaseConfig = {
 
 // Firebase 初期化
 const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
