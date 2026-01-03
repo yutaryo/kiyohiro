@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs, doc } from 'firebase/firestore';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Search, Home, Library, Zap, Sparkles } from 'lucide-react';
 
 /**
  * Firebase Configuration
- * グローバル変数から取得
  */
 const firebaseConfig = JSON.parse(__firebase_config);
 
-// シングルトンとして初期化
+// シングルトン初期化
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -27,9 +26,6 @@ export default function App() {
   
   const audioRef = useRef(new Audio());
 
-  /**
-   * トラック選択と再生トグル
-   */
   const handleTrackSelect = useCallback((track) => {
     if (currentTrack?.id === track.id) {
       setIsPlaying(prev => !prev);
@@ -67,53 +63,52 @@ export default function App() {
    * 認証フロー (RULE 3)
    */
   useEffect(() => {
-    const performAuth = async () => {
+    const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
         }
-      } catch (error) {
-        console.error("Auth error:", error);
-        // フォールバック
+      } catch (err) {
+        console.error("Auth failed:", err);
         await signInAnonymously(auth);
       }
     };
-    performAuth();
-    return onAuthStateChanged(auth, setUser);
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
   }, []);
 
   /**
    * Firestoreデータ購読 (RULE 1, 2, 3)
    */
   useEffect(() => {
-    // 認証が完了するまで待機
     if (!user) return;
 
-    // RULE 1: 正しいパス構造 (奇数セグメント)
-    const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
+    // RULE 1: 正しいパス構造（奇数セグメント: artifacts(1), appId(2), public(3), data(4), tracks(5)）
+    const tracksCollection = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     
     let isMounted = true;
 
-    const initializeData = async () => {
+    const setupDatabase = async () => {
       try {
-        const snap = await getDocs(tracksRef);
+        const snap = await getDocs(tracksCollection);
         if (snap.empty && isMounted) {
           const samples = [
             { title: "AI Nebula", artist: "Neural Synth", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400" },
             { title: "Cyber Horizon", artist: "Data Pulse", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", cover: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400" }
           ];
           for (const s of samples) {
-            await addDoc(tracksRef, { ...s, createdAt: serverTimestamp() });
+            await addDoc(tracksCollection, { ...s, createdAt: serverTimestamp() });
           }
         }
       } catch (e) {
-        console.error("Seeding error:", e);
+        console.error("Setup error:", e);
       }
 
-      // RULE 2: シンプルなクエリで購読し、JSでソート
-      const unsubscribe = onSnapshot(tracksRef, (snap) => {
+      // RULE 2: シンプルなクエリ
+      const unsub = onSnapshot(tracksCollection, (snap) => {
         if (!isMounted) return;
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const sorted = data.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
@@ -126,10 +121,10 @@ export default function App() {
         setLoading(false);
       });
 
-      return unsubscribe;
+      return unsub;
     };
 
-    const unsubPromise = initializeData();
+    const unsubPromise = setupDatabase();
 
     return () => {
       isMounted = false;
@@ -138,7 +133,7 @@ export default function App() {
   }, [user, appId]);
 
   /**
-   * オーディオ再生同期
+   * オーディオ同期
    */
   useEffect(() => {
     const audio = audioRef.current;
@@ -191,9 +186,9 @@ export default function App() {
           <span className="text-xl font-black italic tracking-tighter uppercase">FIREBEAT<span className="text-indigo-400">AI</span></span>
         </div>
         <nav className="space-y-4 flex-1">
-          <NavItem icon={Home} label="ホーム" active />
-          <NavItem icon={Search} label="検索" />
-          <NavItem icon={Library} label="ライブラリ" />
+          <NavItem IconComponent={Home} label="ホーム" active />
+          <NavItem IconComponent={Search} label="検索" />
+          <NavItem IconComponent={Library} label="ライブラリ" />
         </nav>
       </aside>
 
@@ -295,10 +290,11 @@ export default function App() {
   );
 }
 
-function NavItem({ icon: Icon, label, active = false }) {
+function NavItem({ IconComponent, label, active = false }) {
+  // アイコンをコンポーネントとして扱い、JSXとして描画する
   return (
     <button className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${active ? 'bg-indigo-600/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
-      <Icon size={20} className={active ? 'text-indigo-400' : ''} />
+      <IconComponent size={20} className={active ? 'text-indigo-400' : ''} />
       <span className="font-bold text-[11px] uppercase tracking-widest">{label}</span>
     </button>
   );
