@@ -4,15 +4,23 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, addDoc, serverTimestamp, deleteDoc, getDocs } from 'firebase/firestore';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Heart, Search, Home, Library, AlertCircle, RefreshCcw } from 'lucide-react';
 
-// --- あなたの Firebase 設定 ---
+// --- Firebase 設定 ---
+// process.env が存在しない環境（ブラウザ直実行）でのエラーを回避するための安全な取得処理
+const getEnv = (key, defaultValue) => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  return defaultValue;
+};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
-  authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
-  projectId: "mymusicplayer-ef8f0",
-  storageBucket: "mymusicplayer-ef8f0.firebasestorage.app",
-  messagingSenderId: "305125896450",
-  appId: "1:305125896450:web:eb15f3650452fe442f521b",
-  measurementId: "G-4M73KXLS97"
+  apiKey: getEnv("REACT_APP_FIREBASE_API_KEY", "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU"),
+  authDomain: getEnv("REACT_APP_FIREBASE_AUTH_DOMAIN", "mymusicplayer-ef8f0.firebaseapp.com"),
+  projectId: getEnv("REACT_APP_FIREBASE_PROJECT_ID", "mymusicplayer-ef8f0"),
+  storageBucket: getEnv("REACT_APP_FIREBASE_STORAGE_BUCKET", "mymusicplayer-ef8f0.firebasestorage.app"),
+  messagingSenderId: getEnv("REACT_APP_FIREBASE_MESSAGING_SENDER_ID", "305125896450"),
+  appId: getEnv("REACT_APP_FIREBASE_APP_ID", "1:305125896450:web:eb15f3650452fe442f521b"),
+  measurementId: getEnv("REACT_APP_FIREBASE_MEASUREMENT_ID", "G-4M73KXLS97")
 };
 
 // Firebase 初期化
@@ -20,7 +28,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ローカル環境(GitHub/Vercel)で使う場合は 'my-music-app' などの固定値に変更してください
+// アプリケーションIDの特定
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'music-player-app';
 
 export default function App() {
@@ -35,7 +43,7 @@ export default function App() {
   
   const audioRef = useRef(new Audio());
 
-  // 1. 認証処理 (カスタムトークンエラーを回避するフォールバック付き)
+  // 1. 認証処理
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -64,7 +72,6 @@ export default function App() {
 
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     
-    // データがない場合にサンプルを自動作成する
     const ensureInitialData = async () => {
       try {
         const snapshot = await getDocs(tracksRef);
@@ -119,12 +126,25 @@ export default function App() {
   useEffect(() => {
     if (currentTrack && currentTrack.url) {
       audioRef.current.src = currentTrack.url;
-      if (isPlaying) audioRef.current.play().catch(e => console.error(e));
+      if (isPlaying) {
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.error("Playback failed:", e));
+        }
+      }
     }
-  }, [currentTrack]);
+  }, [currentTrack, isPlaying]);
 
   useEffect(() => {
-    isPlaying ? audioRef.current.play().catch(() => {}) : audioRef.current.pause();
+    const audio = audioRef.current;
+    if (isPlaying) {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
+    } else {
+      audio.pause();
+    }
   }, [isPlaying]);
 
   useEffect(() => {
@@ -140,9 +160,12 @@ export default function App() {
     };
   }, [tracks, currentTrack]);
 
+  useEffect(() => {
+    audioRef.current.volume = volume;
+  }, [volume]);
+
   return (
     <div className="flex h-screen bg-neutral-950 text-white font-sans overflow-hidden">
-      {/* サイドバー */}
       <aside className="w-64 bg-black p-6 flex flex-col gap-8 hidden md:flex border-r border-neutral-800">
         <div className="flex items-center gap-2 text-indigo-500 font-bold text-2xl">
           <Music size={32} />
@@ -155,7 +178,6 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* メインエリア */}
       <main className="flex-1 overflow-y-auto bg-gradient-to-b from-neutral-900 to-black p-8 pb-32">
         <header className="flex justify-between items-center mb-10">
           <h1 className="text-3xl font-bold italic tracking-tighter">Firestore Music</h1>
@@ -200,7 +222,7 @@ export default function App() {
                   className={`group p-4 rounded-2xl transition-all cursor-pointer relative ${currentTrack?.id === track.id ? 'bg-indigo-600/20 ring-1 ring-indigo-500 shadow-lg shadow-indigo-500/10' : 'bg-neutral-900/50 hover:bg-neutral-800'}`}
                 >
                   <div className="relative aspect-square mb-4 overflow-hidden rounded-xl bg-neutral-800 flex items-center justify-center shadow-lg">
-                    {track.cover ? <img src={track.cover} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" /> : <Music className="text-neutral-700" />}
+                    {track.cover ? <img src={track.cover} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" alt={track.title} /> : <Music className="text-neutral-700" />}
                     <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                       {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} />}
                     </div>
@@ -214,13 +236,12 @@ export default function App() {
         </section>
       </main>
 
-      {/* プレイヤーコントロール */}
       <footer className="fixed bottom-0 left-0 right-0 h-24 bg-black/90 backdrop-blur-xl border-t border-neutral-800 px-6 flex items-center justify-between z-50">
         <div className="flex items-center gap-4 w-1/4">
           {currentTrack && (
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded bg-neutral-800 overflow-hidden shadow-inner border border-neutral-700 flex-shrink-0">
-                {currentTrack.cover && <img src={currentTrack.cover} className="w-full h-full object-cover" />}
+                {currentTrack.cover && <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />}
               </div>
               <div className="overflow-hidden">
                 <p className="text-xs font-bold truncate">{currentTrack.title}</p>
@@ -245,9 +266,15 @@ export default function App() {
 
         <div className="w-1/4 flex justify-end items-center gap-3">
           <Volume2 size={16} className="text-neutral-500" />
-          <div className="w-20 bg-neutral-800 h-1 rounded-full overflow-hidden">
-            <div className="bg-white/70 h-full" style={{ width: `${volume * 100}%` }} />
-          </div>
+          <input 
+            type="range" 
+            min="0" 
+            max="1" 
+            step="0.01" 
+            value={volume} 
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-20 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-white" 
+          />
         </div>
       </footer>
     </div>
