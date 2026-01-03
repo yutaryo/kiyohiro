@@ -1,26 +1,46 @@
+/* eslint-disable no-undef */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Search, Home, Library, Sparkles, Zap, Wand2 } from 'lucide-react';
 
 // --- Firebase Configuration ---
-// グローバル変数から設定を取得し、フォールバックを用意
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {
-      apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
-      authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
-      projectId: "mymusicplayer-ef8f0",
-      storageBucket: "mymusicplayer-ef8f0.firebasestorage.app",
-      messagingSenderId: "305125896450",
-      appId: "1:305125896450:web:eb15f3650452fe442f521b"
-    };
+// ビルドエラーを防ぐため、windowオブジェクトからの取得を試みる安全な設計
+const getFirebaseConfig = () => {
+  try {
+    if (typeof window !== 'undefined' && window.__firebase_config) {
+      return JSON.parse(window.__firebase_config);
+    }
+    if (typeof __firebase_config !== 'undefined') {
+      return JSON.parse(__firebase_config);
+    }
+  } catch (e) {
+    console.error("Firebase config parse error", e);
+  }
+  // フォールバック
+  return {
+    apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
+    authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
+    projectId: "mymusicplayer-ef8f0",
+    storageBucket: "mymusicplayer-ef8f0.firebasestorage.app",
+    messagingSenderId: "305125896450",
+    appId: "1:305125896450:web:eb15f3650452fe442f521b"
+  };
+};
 
+const firebaseConfig = getFirebaseConfig();
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'firebeat-ai-pro-v2';
+
+// appIdも安全に取得
+const getAppId = () => {
+  if (typeof window !== 'undefined' && window.__app_id) return window.__app_id;
+  if (typeof __app_id !== 'undefined') return __app_id;
+  return 'firebeat-ai-pro-v2';
+};
+const appId = getAppId();
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -82,12 +102,15 @@ export default function App() {
 
   // --- Effects ---
 
-  // (1) 認証の初期化
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+        const token = typeof window !== 'undefined' && window.__initial_auth_token 
+          ? window.__initial_auth_token 
+          : (typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null);
+
+        if (token) {
+          await signInWithCustomToken(auth, token);
         } else {
           await signInAnonymously(auth);
         }
@@ -96,17 +119,17 @@ export default function App() {
       }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
     return () => unsubscribe();
   }, []);
 
-  // (2) データの取得 (ユーザー認証後)
   useEffect(() => {
     if (!user) return;
 
     const tracksCollection = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
 
-    // シードデータ投入（データが空の場合）
     const seedDataIfEmpty = async () => {
       try {
         const snap = await getDocs(tracksCollection);
@@ -135,7 +158,6 @@ export default function App() {
     };
     seedDataIfEmpty();
 
-    // リアルタイムリスナー
     const unsubscribe = onSnapshot(query(tracksCollection), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTracks(data);
@@ -148,7 +170,6 @@ export default function App() {
     return () => unsubscribe();
   }, [user, currentTrack]);
 
-  // (3) オーディオ再生制御
   useEffect(() => {
     const audio = audioRef.current;
     if (currentTrack?.url && audio.src !== currentTrack.url) {
@@ -166,10 +187,13 @@ export default function App() {
     }
   }, [currentTrack, isPlaying]);
 
-  // (4) タイムアップデートと終了イベント
   useEffect(() => {
     const audio = audioRef.current;
-    const up = () => audio.duration && setProgress((audio.currentTime / audio.duration) * 100);
+    const up = () => {
+      if (audio.duration) {
+        setProgress((audio.currentTime / audio.duration) * 100);
+      }
+    };
     const ed = () => handleNext();
     audio.addEventListener('timeupdate', up);
     audio.addEventListener('ended', ed);
@@ -179,7 +203,6 @@ export default function App() {
     };
   }, [handleNext]);
 
-  // (5) 音量
   useEffect(() => {
     audioRef.current.volume = volume;
   }, [volume]);
@@ -227,7 +250,7 @@ export default function App() {
               {user ? "AI READY." : "CONNECTING..."}
             </h2>
             <p className="text-zinc-500 text-xs font-medium uppercase tracking-[0.3em]">
-              {user ? `User: ${user.uid.slice(0, 8)}` : "Initializing Engine..."}
+              {user ? `User ID: ${user.uid.slice(0, 8)}` : "Initializing Engine..."}
             </p>
           </div>
         </header>
