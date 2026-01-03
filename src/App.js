@@ -39,6 +39,19 @@ export default function App() {
   const audioRef = useRef(new Audio());
 
   // --- Logic Functions ---
+
+  // リストの曲をクリックした時の処理（再生/停止のトグル機能を追加）
+  const handleTrackSelect = (track) => {
+    if (currentTrack?.id === track.id) {
+      // 同じ曲をクリックした場合は再生状態を反転させる
+      setIsPlaying(!isPlaying);
+    } else {
+      // 違う曲をクリックした場合はその曲をセットして再生する
+      setCurrentTrack(track);
+      setIsPlaying(true);
+    }
+  };
+
   const handleNext = useCallback(() => {
     if (tracks.length === 0) return;
     const idx = tracks.findIndex(t => t.id === currentTrack?.id);
@@ -105,15 +118,17 @@ export default function App() {
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (currentTrack?.url) {
+    // 曲が変わった時のみソースを更新
+    if (currentTrack?.url && audio.src !== currentTrack.url) {
       audio.src = currentTrack.url;
-      if (isPlaying) audio.play().catch(() => setIsPlaying(false));
     }
-  }, [currentTrack]);
-
-  useEffect(() => {
-    isPlaying ? audioRef.current.play().catch(() => setIsPlaying(false)) : audioRef.current.pause();
-  }, [isPlaying]);
+    
+    if (isPlaying) {
+      audio.play().catch(() => setIsPlaying(false));
+    } else {
+      audio.pause();
+    }
+  }, [currentTrack, isPlaying]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -203,7 +218,7 @@ export default function App() {
                 {tracks.map(track => (
                   <div 
                     key={track.id} 
-                    onClick={() => { setCurrentTrack(track); setIsPlaying(true); }}
+                    onClick={() => handleTrackSelect(track)}
                     className={`group p-5 rounded-[2.5rem] transition-all duration-700 cursor-pointer border ${currentTrack?.id === track.id ? 'bg-indigo-600/10 border-indigo-500/30 shadow-2xl shadow-indigo-500/10 scale-[1.02]' : 'bg-zinc-900/20 border-transparent hover:bg-zinc-900/50 hover:border-zinc-800'}`}
                   >
                     <div className="relative aspect-square mb-6 overflow-hidden rounded-[1.8rem] shadow-2xl">
