@@ -1,30 +1,26 @@
-/* eslint-disable no-undef */
-/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Heart, Search, Home, Library, AlertCircle, Sparkles, Zap, Wand2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Search, Home, Library, Sparkles, Zap, Wand2 } from 'lucide-react';
 
 // --- Firebase Configuration ---
-const getEnv = (key, defaultValue) => {
-  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
-  return defaultValue;
-};
-
-const firebaseConfig = {
-  apiKey: getEnv("REACT_APP_FIREBASE_API_KEY", "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU"),
-  authDomain: getEnv("REACT_APP_FIREBASE_AUTH_DOMAIN", "mymusicplayer-ef8f0.firebaseapp.com"),
-  projectId: getEnv("REACT_APP_FIREBASE_PROJECT_ID", "mymusicplayer-ef8f0"),
-  storageBucket: getEnv("REACT_APP_FIREBASE_STORAGE_BUCKET", "mymusicplayer-ef8f0.firebasestorage.app"),
-  messagingSenderId: getEnv("REACT_APP_FIREBASE_MESSAGING_SENDER_ID", "305125896450"),
-  appId: getEnv("REACT_APP_FIREBASE_APP_ID", "1:305125896450:web:eb15f3650452fe442f521b")
-};
+// グローバル変数から設定を取得し、フォールバックを用意
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : {
+      apiKey: "AIzaSyDaGkRiRbe54qV85-32ZS09AALS8KlGrLU",
+      authDomain: "mymusicplayer-ef8f0.firebaseapp.com",
+      projectId: "mymusicplayer-ef8f0",
+      storageBucket: "mymusicplayer-ef8f0.firebasestorage.app",
+      messagingSenderId: "305125896450",
+      appId: "1:305125896450:web:eb15f3650452fe442f521b"
+    };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'firebeat-ai-pro-v2';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'firebeat-ai-pro-v2';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -40,13 +36,10 @@ export default function App() {
 
   // --- Logic Functions ---
 
-  // リストの曲をクリックした時の処理（再生/停止のトグル機能を追加）
   const handleTrackSelect = (track) => {
     if (currentTrack?.id === track.id) {
-      // 同じ曲をクリックした場合は再生状態を反転させる
       setIsPlaying(!isPlaying);
     } else {
-      // 違う曲をクリックした場合はその曲をセットして再生する
       setCurrentTrack(track);
       setIsPlaying(true);
     }
@@ -55,14 +48,16 @@ export default function App() {
   const handleNext = useCallback(() => {
     if (tracks.length === 0) return;
     const idx = tracks.findIndex(t => t.id === currentTrack?.id);
-    setCurrentTrack(tracks[(idx + 1) % tracks.length]);
+    const nextTrack = tracks[(idx + 1) % tracks.length];
+    setCurrentTrack(nextTrack);
     setIsPlaying(true);
   }, [tracks, currentTrack]);
 
   const handlePrev = useCallback(() => {
     if (tracks.length === 0) return;
     const idx = tracks.findIndex(t => t.id === currentTrack?.id);
-    setCurrentTrack(tracks[(idx - 1 + tracks.length) % tracks.length]);
+    const prevTrack = tracks[(idx - 1 + tracks.length) % tracks.length];
+    setCurrentTrack(prevTrack);
     setIsPlaying(true);
   }, [tracks, currentTrack]);
 
@@ -86,56 +81,105 @@ export default function App() {
   };
 
   // --- Effects ---
-  useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
-    return onAuthStateChanged(auth, setUser);
-  }, []);
 
+  // (1) 認証の初期化
   useEffect(() => {
-    if (!user) return;
-    const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
-    
-    const seedData = async () => {
-      const snap = await getDocs(tracksRef);
-      if (snap.empty) {
-        const samples = [
-        ];
-        for (const s of samples) await addDoc(tracksRef, { ...s, createdAt: serverTimestamp() });
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Authentication failed:", error);
       }
     };
-    seedData();
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
 
-    return onSnapshot(query(tracksRef), (snap) => {
+  // (2) データの取得 (ユーザー認証後)
+  useEffect(() => {
+    if (!user) return;
+
+    const tracksCollection = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
+
+    // シードデータ投入（データが空の場合）
+    const seedDataIfEmpty = async () => {
+      try {
+        const snap = await getDocs(tracksCollection);
+        if (snap.empty) {
+          const samples = [
+            { 
+              title: "Neon Dreams", 
+              artist: "SynthWave AI", 
+              cover: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&h=400&fit=crop", 
+              url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" 
+            },
+            { 
+              title: "Digital Horizon", 
+              artist: "Data Beats", 
+              cover: "https://images.unsplash.com/photo-1557683316-973673baf926?w=400&h=400&fit=crop", 
+              url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" 
+            }
+          ];
+          for (const s of samples) {
+            await addDoc(tracksCollection, { ...s, createdAt: serverTimestamp() });
+          }
+        }
+      } catch (err) {
+        console.error("Seeding error:", err);
+      }
+    };
+    seedDataIfEmpty();
+
+    // リアルタイムリスナー
+    const unsubscribe = onSnapshot(query(tracksCollection), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTracks(data);
       setLoading(false);
       if (data.length > 0 && !currentTrack) setCurrentTrack(data[0]);
+    }, (error) => {
+      console.error("Firestore listener error:", error);
     });
-  }, [user]);
 
+    return () => unsubscribe();
+  }, [user, currentTrack]);
+
+  // (3) オーディオ再生制御
   useEffect(() => {
     const audio = audioRef.current;
-    // 曲が変わった時のみソースを更新
     if (currentTrack?.url && audio.src !== currentTrack.url) {
       audio.src = currentTrack.url;
+      audio.load();
     }
     
     if (isPlaying) {
-      audio.play().catch(() => setIsPlaying(false));
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => setIsPlaying(false));
+      }
     } else {
       audio.pause();
     }
   }, [currentTrack, isPlaying]);
 
+  // (4) タイムアップデートと終了イベント
   useEffect(() => {
     const audio = audioRef.current;
     const up = () => audio.duration && setProgress((audio.currentTime / audio.duration) * 100);
     const ed = () => handleNext();
     audio.addEventListener('timeupdate', up);
     audio.addEventListener('ended', ed);
-    return () => { audio.removeEventListener('timeupdate', up); audio.removeEventListener('ended', ed); };
+    return () => { 
+      audio.removeEventListener('timeupdate', up); 
+      audio.removeEventListener('ended', ed); 
+    };
   }, [handleNext]);
 
+  // (5) 音量
   useEffect(() => {
     audioRef.current.volume = volume;
   }, [volume]);
@@ -180,9 +224,11 @@ export default function App() {
         <header className="p-10 flex justify-between items-center">
           <div>
             <h2 className="text-5xl font-black mb-3 tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
-              AI READY.
+              {user ? "AI READY." : "CONNECTING..."}
             </h2>
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-[0.3em]">Next-Gen Audio Experience</p>
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-[0.3em]">
+              {user ? `User: ${user.uid.slice(0, 8)}` : "Initializing Engine..."}
+            </p>
           </div>
         </header>
 
@@ -208,7 +254,7 @@ export default function App() {
 
             {loading ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                {[1,2,3,4].map(i => <div key={i} className="aspect-square bg-zinc-900/50 rounded-[2.5rem] animate-pulse" />)}
+                {[1, 2, 3, 4].map(i => <div key={i} className="aspect-square bg-zinc-900/50 rounded-[2.5rem] animate-pulse" />)}
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
