@@ -1,3 +1,5 @@
+/* eslint-disable no-undef */
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -5,7 +7,6 @@ import { getFirestore, collection, doc, setDoc, onSnapshot, query, addDoc, serve
 import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Heart, Search, Home, Library, AlertCircle, RefreshCcw } from 'lucide-react';
 
 // --- Firebase 設定 ---
-// process.env が存在しない環境（ブラウザ直実行）でのエラーを回避するための安全な取得処理
 const getEnv = (key, defaultValue) => {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key];
@@ -23,13 +24,10 @@ const firebaseConfig = {
   measurementId: getEnv("REACT_APP_FIREBASE_MEASUREMENT_ID", "G-4M73KXLS97")
 };
 
-// Firebase 初期化
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// アプリケーションIDの特定
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'music-player-app';
+const appId = 'music-player-app';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -43,22 +41,12 @@ export default function App() {
   
   const audioRef = useRef(new Audio());
 
-  // 1. 認証処理
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          try {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } catch (e) {
-            console.warn("Token mismatch, falling back to anonymous...");
-            await signInAnonymously(auth);
-          }
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error) {
-        setErrorLog("認証エラー: " + error.message);
+        setErrorLog("Auth Error: " + error.message);
       }
     };
     initAuth();
@@ -66,10 +54,8 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Firestore同期 ＋ 自動修復機能
   useEffect(() => {
     if (!user) return;
-
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     
     const ensureInitialData = async () => {
@@ -77,36 +63,29 @@ export default function App() {
         const snapshot = await getDocs(tracksRef);
         if (snapshot.empty) {
           await addDoc(tracksRef, {
-            title: "Sample Song (SoundHelix)",
+            title: "Sample Song",
             artist: "SoundHelix Official",
             url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
             cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&h=300&fit=crop",
             createdAt: serverTimestamp()
           });
         }
-      } catch (e) {
-        console.error("Auto-fix failed:", e);
-      }
+      } catch (e) { console.error(e); }
     };
-
     ensureInitialData();
 
     const unsubscribeTracks = onSnapshot(query(tracksRef), (snapshot) => {
       const trackData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTracks(trackData);
       setLoading(false);
-      if (trackData.length > 0 && !currentTrack) {
-        setCurrentTrack(trackData[0]);
-      }
+      if (trackData.length > 0 && !currentTrack) setCurrentTrack(trackData[0]);
     }, (err) => {
-      setErrorLog("Firestore読み込み失敗: " + err.message);
+      setErrorLog("Firestore Error: " + err.message);
       setLoading(false);
     });
-
     return () => unsubscribeTracks();
-  }, [user]);
+  }, [user, currentTrack]);
 
-  // 3. 再生制御
   const handleNext = () => {
     if (tracks.length === 0) return;
     const currentIndex = tracks.findIndex(t => t.id === currentTrack?.id);
@@ -127,23 +106,16 @@ export default function App() {
     if (currentTrack && currentTrack.url) {
       audioRef.current.src = currentTrack.url;
       if (isPlaying) {
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(e => console.error("Playback failed:", e));
-        }
+        audioRef.current.play().catch(() => {});
       }
     }
   }, [currentTrack, isPlaying]);
 
   useEffect(() => {
-    const audio = audioRef.current;
     if (isPlaying) {
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {});
-      }
+      audioRef.current.play().catch(() => {});
     } else {
-      audio.pause();
+      audioRef.current.pause();
     }
   }, [isPlaying]);
 
@@ -172,9 +144,15 @@ export default function App() {
           <span>FireBeat</span>
         </div>
         <nav className="flex flex-col gap-4 text-sm text-neutral-400">
-          <NavItem icon={<Home size={20} />} label="ホーム" active />
-          <NavItem icon={<Search size={20} />} label="検索" />
-          <NavItem icon={<Library size={20} />} label="ライブラリ" />
+          <div className="flex items-center gap-4 cursor-pointer text-white">
+            <Home size={20} /> <span className="font-medium">ホーム</span>
+          </div>
+          <div className="flex items-center gap-4 cursor-pointer hover:text-white transition">
+            <Search size={20} /> <span className="font-medium">検索</span>
+          </div>
+          <div className="flex items-center gap-4 cursor-pointer hover:text-white transition">
+            <Library size={20} /> <span className="font-medium">ライブラリ</span>
+          </div>
         </nav>
       </aside>
 
@@ -182,36 +160,21 @@ export default function App() {
         <header className="flex justify-between items-center mb-10">
           <h1 className="text-3xl font-bold italic tracking-tighter">Firestore Music</h1>
           <div className="px-4 py-2 bg-neutral-800 rounded-full text-[10px] font-mono text-neutral-400 border border-neutral-700">
-            {user ? `Authenticated` : 'Connecting...'}
+            {user ? 'Authenticated' : 'Connecting...'}
           </div>
         </header>
 
         {errorLog && (
           <div className="mb-8 p-4 bg-red-900/30 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-200 text-sm">
-            <AlertCircle size={20} />
-            <p>{errorLog}</p>
+            <AlertCircle size={20} /> <p>{errorLog}</p>
           </div>
         )}
 
         <section>
-          <div className="flex justify-between items-end mb-6">
-            <h2 className="text-xl font-bold">あなたのライブラリ</h2>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="text-xs text-neutral-500 hover:text-white flex items-center gap-1 transition"
-            >
-              <RefreshCcw size={12} /> 更新
-            </button>
-          </div>
-
+          <h2 className="text-xl font-bold mb-6">あなたのライブラリ</h2>
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
-            </div>
-          ) : tracks.length === 0 ? (
-            <div className="py-20 text-center border-2 border-dashed border-neutral-800 rounded-3xl bg-neutral-900/20">
-              <Music size={48} className="mx-auto mb-4 text-neutral-800" />
-              <p className="text-neutral-400 text-sm">曲データが見つかりません。</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -219,16 +182,16 @@ export default function App() {
                 <div 
                   key={track.id} 
                   onClick={() => { setCurrentTrack(track); setIsPlaying(true); }}
-                  className={`group p-4 rounded-2xl transition-all cursor-pointer relative ${currentTrack?.id === track.id ? 'bg-indigo-600/20 ring-1 ring-indigo-500 shadow-lg shadow-indigo-500/10' : 'bg-neutral-900/50 hover:bg-neutral-800'}`}
+                  className={`group p-4 rounded-2xl transition-all cursor-pointer ${currentTrack?.id === track.id ? 'bg-indigo-600/20 ring-1 ring-indigo-500' : 'bg-neutral-900/50 hover:bg-neutral-800'}`}
                 >
-                  <div className="relative aspect-square mb-4 overflow-hidden rounded-xl bg-neutral-800 flex items-center justify-center shadow-lg">
-                    {track.cover ? <img src={track.cover} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" alt={track.title} /> : <Music className="text-neutral-700" />}
+                  <div className="relative aspect-square mb-4 overflow-hidden rounded-xl bg-neutral-800 shadow-lg">
+                    {track.cover && <img src={track.cover} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" alt="" />}
                     <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                       {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} />}
                     </div>
                   </div>
-                  <h3 className="font-bold truncate text-sm">{track.title || "Untitled"}</h3>
-                  <p className="text-xs text-neutral-400 truncate mt-1">{track.artist || "Unknown Artist"}</p>
+                  <h3 className="font-bold truncate text-sm">{track.title}</h3>
+                  <p className="text-xs text-neutral-400 truncate mt-1">{track.artist}</p>
                 </div>
               ))}
             </div>
@@ -236,11 +199,11 @@ export default function App() {
         </section>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 h-24 bg-black/90 backdrop-blur-xl border-t border-neutral-800 px-6 flex items-center justify-between z-50">
+      <footer className="fixed bottom-0 left-0 right-0 h-24 bg-black/90 backdrop-blur-xl border-t border-neutral-800 px-6 flex items-center justify-between">
         <div className="flex items-center gap-4 w-1/4">
           {currentTrack && (
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded bg-neutral-800 overflow-hidden shadow-inner border border-neutral-700 flex-shrink-0">
+              <div className="w-12 h-12 rounded bg-neutral-800 overflow-hidden border border-neutral-700">
                 {currentTrack.cover && <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />}
               </div>
               <div className="overflow-hidden">
@@ -253,39 +216,26 @@ export default function App() {
 
         <div className="flex flex-col items-center gap-2 flex-1 max-w-xl">
           <div className="flex items-center gap-6">
-            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-colors"><SkipBack size={20} /></button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition active:scale-95 shadow-lg">
+            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition"><SkipBack size={20} /></button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black shadow-lg">
               {isPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-1" />}
             </button>
-            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-colors"><SkipForward size={20} /></button>
+            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition"><SkipForward size={20} /></button>
           </div>
           <div className="w-full bg-neutral-800 h-1 rounded-full overflow-hidden mt-1">
-            <div className="bg-indigo-500 h-full transition-all duration-300" style={{ width: `${progress}%` }} />
+            <div className="bg-indigo-500 h-full transition-all" style={{ width: `${progress}%` }} />
           </div>
         </div>
 
         <div className="w-1/4 flex justify-end items-center gap-3">
           <Volume2 size={16} className="text-neutral-500" />
           <input 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value={volume} 
+            type="range" min="0" max="1" step="0.01" value={volume} 
             onChange={(e) => setVolume(parseFloat(e.target.value))}
             className="w-20 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-white" 
           />
         </div>
       </footer>
-    </div>
-  );
-}
-
-function NavItem({ icon, label, active = false }) {
-  return (
-    <div className={`flex items-center gap-4 cursor-pointer transition ${active ? 'text-white' : 'hover:text-white'}`}>
-      {icon}
-      <span className="font-medium">{label}</span>
     </div>
   );
 }
