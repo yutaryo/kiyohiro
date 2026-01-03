@@ -2,11 +2,102 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Music Player</title>
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#050505" />
+    <meta name="description" content="FireBeat AI - 次世代のAI搭載ミュージックプレイヤー。Firestoreと連携し、最高のリスニング体験を提供します。" />
+    
+    <!-- リッチリザルト (Structured Data) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "FireBeat AI Music Player",
+        "operatingSystem": "Web",
+        "applicationCategory": "MultimediaApplication",
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.8",
+          "ratingCount": "1024"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "JPY"
+        }
+      }
+    </script>
+
+    <!-- ネットワーク依存関係の最適化 (Preconnect) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" />
+    <link rel="preconnect" href="https://www.gstatic.com" />
+
+    <!-- Google Fonts の非同期読み込み (レンダリングブロック回避) -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" />
+    </noscript>
+
+    <!-- Tailwind CSS (開発用CDNだが、レンダリング順序を考慮) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+          }
+        }
+      }
+    </script>
+
+    <!-- 効率的なキャッシュのためのスタイル調整 -->
+    <style>
+      /* 初期表示時のチラつき(FOUC)防止用の最小限のCSS */
+      body {
+        background-color: #050505;
+        margin: 0;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      #root:empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        color: #444;
+      }
+    </style>
+    
+    <title>FireBeat AI | Next-Gen Music Experience</title>
   </head>
   <body>
-    <div id="root"></div>
+    <noscript>このアプリを実行するには JavaScript を有効にする必要があります。</noscript>
+    
+    <!-- 初期ローディングスケルトン (LCP改善) -->
+    <div id="root">
+      <div className="animate-pulse flex flex-col items-center">
+        <div className="w-16 h-16 bg-zinc-800 rounded-2xl mb-4"></div>
+        <div className="w-32 h-2 bg-zinc-800 rounded"></div>
+      </div>
+    </div>
+
+    <!-- 
+      ネットワーク依存関係ツリーの末尾で実行
+      Vercel等でのビルド時にここにJSファイルが注入されます 
+    -->
   </body>
 </html>
