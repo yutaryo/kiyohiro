@@ -124,6 +124,31 @@ export default function App() {
     }
   };
 
+  // --- Bluetooth/OS Media Session Integration ---
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: currentTrack.title || 'Unknown Title',
+        artist: currentTrack.artist || 'Unknown Artist',
+        album: 'Akiko Music',
+        artwork: [
+          { src: currentTrack.cover || '', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
+    }
+  }, [currentTrack, handlePrev, handleNext]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    }
+  }, [isPlaying]);
+
   useEffect(() => {
     if (currentTrack?.url) {
       const audio = audioRef.current;
@@ -245,8 +270,6 @@ export default function App() {
                   </span>
                 </div>
               </div>
-
-              {/* Mobile Quick Search Icon or Similar could go here */}
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -372,7 +395,6 @@ export default function App() {
                <div className="bg-white/40 h-full rounded-full" style={{ width: `${volume * 100}%` }} />
             </div>
           </div>
-          {/* Mobile indicator for isPlaying */}
           <div className="sm:hidden">
             {isPlaying && (
               <div className="flex gap-0.5 items-end h-3">
