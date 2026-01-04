@@ -1,3 +1,4 @@
+
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from 'react';
@@ -78,7 +79,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeTrackRef.current) {
-      activeTrackRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      activeTrackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     }
   }, [currentTrack]);
 
@@ -124,6 +125,7 @@ export default function App() {
     }
   };
 
+  // --- Bluetooth/OS Media Session Integration ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {
       navigator.mediaSession.metadata = new window.MediaMetadata({
@@ -140,7 +142,7 @@ export default function App() {
       navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
       navigator.mediaSession.setActionHandler('nexttrack', handleNext);
     }
-  }, [currentTrack]);
+  }, [currentTrack, handlePrev, handleNext]);
 
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -181,7 +183,7 @@ export default function App() {
   const currentPlaylistStyle = playlists.find(p => p.id === activePlaylist) || playlists[0];
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full gap-8">
+    <div className="flex flex-col h-full gap-10">
       <div className="flex items-center gap-3 px-2">
         <div className={`w-10 h-10 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-2xl flex items-center justify-center shadow-xl ring-2 ring-white/10`}>
           <Sparkles size={20} className="text-white" />
@@ -192,13 +194,13 @@ export default function App() {
         </div>
       </div>
       
-      <nav className="flex flex-col gap-6 text-sm">
-        <div className="space-y-3">
+      <nav className="flex flex-col gap-8 text-sm">
+        <div className="space-y-4">
           <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Explore</p>
           <NavItem icon={playlists[0].icon} label={playlists[0].label} active={activePlaylist === 'All'} onClick={() => { setActivePlaylist('All'); setIsMobileMenuOpen(false); }} />
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Moods</p>
           <div className="space-y-1">
             {playlists.filter(p => p.id !== 'All').map(p => (
@@ -211,7 +213,7 @@ export default function App() {
   );
 
   return (
-    <div className="fixed inset-0 h-[100dvh] bg-[#020202] text-white font-sans overflow-hidden transition-colors duration-1000 select-none">
+    <div className="flex h-screen bg-[#020202] text-white font-sans overflow-hidden transition-colors duration-1000">
       
       {/* Background Glows */}
       <div className="fixed inset-0 pointer-events-none transition-all duration-1000 opacity-30" 
@@ -240,7 +242,7 @@ export default function App() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 z-20 relative overflow-hidden h-full">
+      <main className="flex-1 flex flex-col min-w-0 z-20 relative overflow-hidden pb-28 lg:pb-32">
         
         {/* Background Artist Text */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
@@ -249,11 +251,11 @@ export default function App() {
           </h2>
         </div>
 
-        {/* Header - Spacious size as requested */}
-        <div className="py-4 px-6 lg:py-8 lg:px-12 z-30 relative bg-gradient-to-b from-black/80 to-transparent shrink-0">
-          <header className="flex flex-col gap-4">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-4">
+        {/* Header with Mobile Menu Trigger */}
+        <div className="p-4 lg:p-6 lg:px-12 z-20 relative bg-gradient-to-b from-black/50 to-transparent">
+          <header className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsMobileMenuOpen(true)}
                   className="p-2 -ml-2 lg:hidden text-white bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
@@ -261,39 +263,39 @@ export default function App() {
                   <Menu size={24} />
                 </button>
                 <div className="flex flex-col lg:flex-row lg:items-center lg:gap-4">
-                  <h1 className="text-xl lg:text-3xl font-black tracking-tighter text-white">
+                  <h1 className="text-lg lg:text-2xl font-black tracking-tighter">
                     {currentPlaylistStyle.label}
                   </h1>
-                  <span className={`text-[10px] lg:text-lg bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic font-black uppercase tracking-widest`}>
+                  <span className={`text-xs lg:text-lg bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic font-black`}>
                     / Collection
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full max-w-2xl">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-40 lg:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={12} />
                 <input 
                   type="text" 
-                  placeholder="Search your library..."
+                  placeholder="Quick search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/10 border border-white/10 rounded-full py-2.5 pl-11 pr-5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all backdrop-blur-xl"
+                  className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-9 pr-4 text-[11px] focus:outline-none focus:ring-1 focus:ring-white/20 transition-all backdrop-blur-xl"
                 />
               </div>
-              <button onClick={() => setSortBy(sortBy === 'title' ? 'newest' : 'title')} className="p-3 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all shrink-0">
-                <ArrowUpDown size={18} className={sortBy === 'title' ? 'text-white' : 'text-neutral-500'} />
+              <button onClick={() => setSortBy(sortBy === 'title' ? 'newest' : 'title')} className="p-2.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all">
+                <ArrowUpDown size={14} className={sortBy === 'title' ? 'text-white' : 'text-neutral-500'} />
               </button>
             </div>
           </header>
         </div>
 
-        {/* Horizontal Carousel Area - Adjusted pt-16 for tighter but safe spacing */}
-        <div className="relative flex-1 flex flex-col justify-start min-h-0 z-10 pt-16 lg:pt-24">
+        {/* Scrollable Tracks */}
+        <div className="relative flex-1 flex flex-col justify-center min-h-0 z-10">
           <div 
             ref={scrollContainerRef}
-            className="flex gap-6 lg:gap-10 px-10 lg:px-40 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory h-full items-start pb-32"
+            className="flex gap-6 lg:gap-12 px-6 lg:px-24 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory h-full items-center"
           >
             {filteredTracks.map(track => {
               const isActive = currentTrack?.id === track.id;
@@ -302,15 +304,15 @@ export default function App() {
                   key={track.id} 
                   ref={isActive ? activeTrackRef : null}
                   onClick={() => handleTrackClick(track)}
-                  className="flex-none w-48 sm:w-56 lg:w-64 snap-center group/card cursor-pointer relative mt-8"
+                  className="flex-none w-60 sm:w-64 lg:w-72 snap-center group/card cursor-pointer relative"
                 >
                   <div className={`absolute -inset-6 bg-gradient-to-tr ${currentPlaylistStyle.color} blur-[60px] opacity-0 transition-opacity duration-700 pointer-events-none rounded-full ${isActive && isPlaying ? 'opacity-20 animate-pulse-slow' : ''}`} />
                   
-                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-[2rem] transition-all duration-500 ${isActive ? 'scale-110 shadow-2xl ring-2 ring-white/40' : 'opacity-60 hover:opacity-100 hover:scale-[1.02] ring-1 ring-white/10'}`}>
+                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-[2rem] transition-all duration-500 ${isActive ? 'scale-105 shadow-2xl ring-2 ring-white/30' : 'opacity-60 hover:opacity-100 hover:scale-102 ring-1 ring-white/10'}`}>
                     {track.cover ? (
                       <img src={track.cover} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110" />
                     ) : (
-                      <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={32} className="text-neutral-700" /></div>
+                      <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={30} className="text-neutral-700" /></div>
                     )}
                     
                     <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300 ${isActive && isPlaying ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100'}`}>
@@ -319,13 +321,15 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="absolute inset-x-0 bottom-0 p-5 lg:p-7 bg-gradient-to-t from-black via-black/80 to-transparent">
-                       <h3 className="font-black truncate text-base lg:text-lg tracking-tight text-white mb-1">
+                    <div className="absolute inset-x-0 bottom-0 p-5 lg:p-7 bg-gradient-to-t from-black via-black/60 to-transparent">
+                       <h3 className="font-black truncate text-base lg:text-lg tracking-tight text-white mb-0.5">
                         {track.title}
                       </h3>
-                      <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest truncate">
-                        {track.artist}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest truncate">
+                          {track.artist}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -333,23 +337,23 @@ export default function App() {
             })}
             
             {filteredTracks.length === 0 && (
-              <div className="w-full flex flex-col items-center justify-center text-neutral-600 gap-4 opacity-30 mt-20">
+              <div className="w-full flex flex-col items-center justify-center text-neutral-600 gap-4 opacity-30">
                 <Ghost size={48} />
                 <p className="font-bold uppercase tracking-widest text-xs">No tracks found</p>
               </div>
             )}
-            <div className="flex-none w-48 h-full" />
+            <div className="flex-none w-20 h-full" />
           </div>
         </div>
       </main>
 
       {/* Responsive Player Footer */}
-      <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-4xl h-16 sm:h-20 bg-black/85 backdrop-blur-3xl border border-white/10 rounded-3xl sm:rounded-full px-4 sm:px-8 flex items-center justify-between z-50 shadow-2xl ring-1 ring-white/5">
+      <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-4xl h-16 sm:h-20 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-3xl sm:rounded-full px-4 sm:px-8 flex items-center justify-between z-50 shadow-2xl ring-1 ring-white/5">
         
         <div className="flex items-center gap-3 w-1/4 sm:w-1/3">
           {currentTrack && (
             <>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl overflow-hidden shadow-lg ring-1 ring-white/10 shrink-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl overflow-hidden shadow-lg ring-1 ring-white/10 shrink-0">
                 <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />
               </div>
               <div className="hidden sm:block overflow-hidden">
@@ -360,42 +364,46 @@ export default function App() {
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-1 flex-1 max-w-sm px-2">
-          <div className="flex items-center gap-6 sm:gap-8">
-            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipBack size={18} fill="currentColor" /></button>
+        <div className="flex flex-col items-center gap-1 flex-1 max-w-sm">
+          <div className="flex items-center gap-4 sm:gap-8">
+            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipBack size={16} fill="currentColor" /></button>
             <button 
               onClick={() => setIsPlaying(!isPlaying)} 
               className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition shadow-lg shadow-white/10"
             >
-              {isPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-0.5" />}
+              {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" className="ml-0.5" />}
             </button>
-            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipForward size={18} fill="currentColor" /></button>
+            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipForward size={16} fill="currentColor" /></button>
           </div>
           
-          <div className="w-full flex items-center gap-2 mt-1">
-            <span className="text-[9px] font-bold text-neutral-500 w-8 text-right tabular-nums">
+          <div className="w-full flex items-center gap-2">
+            <span className="text-[8px] font-bold text-neutral-500 w-8 text-right tabular-nums">
               {Math.floor(audioRef.current.currentTime / 60)}:{String(Math.floor(audioRef.current.currentTime % 60)).padStart(2, '0')}
             </span>
             <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden relative">
               <div className={`h-full rounded-full bg-white/60 transition-all duration-300`} style={{ width: `${progress}%` }} />
             </div>
-            <span className="text-[9px] font-bold text-neutral-500 w-8 tabular-nums">
+            <span className="text-[8px] font-bold text-neutral-500 w-8 tabular-nums">
               {audioRef.current.duration ? `${Math.floor(audioRef.current.duration / 60)}:${String(Math.floor(audioRef.current.duration % 60)).padStart(2, '0')}` : '0:00'}
             </span>
           </div>
         </div>
 
         <div className="w-1/4 sm:w-1/3 flex justify-end">
-          <div className="hidden sm:flex items-center gap-2 w-24 mr-4">
-            <Volume2 size={16} className="text-neutral-600" />
+          <div className="hidden sm:flex items-center gap-2 w-24">
+            <Volume2 size={14} className="text-neutral-600" />
             <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden">
                <div className="bg-white/40 h-full rounded-full" style={{ width: `${volume * 100}%` }} />
             </div>
           </div>
-          <div className="flex gap-0.5 items-end h-4">
-            {isPlaying && [0.4, 0.8, 0.5, 0.9].map((d, i) => (
-              <div key={i} className="w-0.5 bg-white/60 rounded-full animate-bar-dance" style={{ animationDelay: `${d}s` }} />
-            ))}
+          <div className="sm:hidden">
+            {isPlaying && (
+              <div className="flex gap-0.5 items-end h-3">
+                {[0.4, 0.8, 0.5].map((d, i) => (
+                  <div key={i} className="w-0.5 bg-white/60 rounded-full animate-bar-dance" style={{ animationDelay: `${d}s` }} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </footer>
@@ -404,7 +412,7 @@ export default function App() {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 0.03; transform: scale(1); } }
-        @keyframes bar-dance { 0%, 100% { height: 4px; } 50% { height: 16px; } }
+        @keyframes bar-dance { 0%, 100% { height: 4px; } 50% { height: 12px; } }
         @keyframes pulse-slow { 0%, 100% { transform: scale(1); opacity: 0.2; } 50% { transform: scale(1.05); opacity: 0.3; } }
         @keyframes slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
         .animate-fade-in { animation: fade-in 2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
