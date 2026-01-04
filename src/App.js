@@ -282,7 +282,7 @@ export default function App() {
         <div className="flex-1 flex items-center relative min-h-0">
           <div 
             ref={scrollContainerRef}
-            className="flex items-center gap-8 lg:gap-12 px-[40vw] overflow-x-auto no-scrollbar py-8 snap-x snap-mandatory"
+            className="flex items-center gap-8 lg:gap-12 px-[25vw] lg:px-[40vw] overflow-x-auto no-scrollbar py-8 snap-x snap-mandatory"
             style={{ scrollBehavior: 'smooth' }}
           >
             {loading ? (
@@ -296,7 +296,7 @@ export default function App() {
                     ref={el => trackRefs.current[track.id] = el}
                     onClick={() => handleTrackClick(track)}
                     className={`relative flex-shrink-0 transition-all duration-700 ease-out snap-center cursor-pointer
-                      ${isActive ? 'w-[300px] lg:w-[320px] scale-100 opacity-100' : 'w-[200px] lg:w-[220px] scale-85 opacity-30 hover:opacity-60 hover:scale-90'}
+                      ${isActive ? 'w-[280px] lg:w-[320px] scale-100 opacity-100' : 'w-[180px] lg:w-[220px] scale-85 opacity-30 hover:opacity-60 hover:scale-90'}
                     `}
                   >
                     <div className={`relative aspect-square rounded-[2rem] lg:rounded-[2.5rem] overflow-hidden shadow-2xl transition-all duration-700 ${isActive ? 'ring-4 ring-white/20 shadow-[0_40px_80px_rgba(0,0,0,0.7)]' : 'ring-1 ring-white/5'}`}>
@@ -339,15 +339,16 @@ export default function App() {
             )}
           </div>
 
+          {/* PCでのみ表示するナビゲーションボタン */}
           <button 
             onClick={handlePrev}
-            className="absolute left-6 lg:left-10 w-12 h-12 lg:w-14 lg:h-14 bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-20"
+            className="absolute left-6 lg:left-10 w-12 h-12 lg:w-14 lg:h-14 bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full hidden lg:flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-20"
           >
             <ChevronLeft size={24} />
           </button>
           <button 
             onClick={handleNext}
-            className="absolute right-6 lg:right-10 w-12 h-12 lg:w-14 lg:h-14 bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-20"
+            className="absolute right-6 lg:right-10 w-12 h-12 lg:w-14 lg:h-14 bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full hidden lg:flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-20"
           >
             <ChevronRight size={24} />
           </button>
