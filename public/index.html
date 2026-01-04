@@ -1,13 +1,25 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-// Tailwind CSSはindex.htmlで読み込んでいるため、ここでのCSSインポートは不要です。
-// ローカル環境でApp.jsxがApp.jsという名前の場合は、適宜読み込み名を調整してください。
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FireBeat Music Player</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { margin: 0; background-color: #000; color: white; }
+      /* カスタムスクロールバー */
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: #000; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <!-- 
+      Vercel や標準的なビルド環境では、ここでの直接読み込みは不要な場合が多いですが、
+      もし public/index.html を直接編集している場合は、このファイル自体に JS を書かないようにします。
+    -->
+  </body>
+</html>
