@@ -1,9 +1,10 @@
-/* eslint-disable */
+/* eslint-disable no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, Library, Heart, Disc, ListMusic, Search, MoreHorizontal } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Search, Home, Library, ListMusic, Plus } from 'lucide-react';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -16,10 +17,10 @@ const firebaseConfig = {
   measurementId: "G-4M73KXLS97"
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'firebeat-prod-v1';
+const appId = 'firebeat-music-v2'; // バージョン管理用のID
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -28,76 +29,82 @@ export default function App() {
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [volume, setVolume] = useState(0.7);
   const [loading, setLoading] = useState(true);
-  const [isSynced, setIsSynced] = useState(false);
-  const [volume, setVolume] = useState(70);
   const [activePlaylist, setActivePlaylist] = useState('All');
   
   const audioRef = useRef(new Audio());
 
-  // 1. Firebase Auth
+  // 1. 認証
   useEffect(() => {
-    signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u) setIsSynced(true);
-    });
+    signInAnonymously(auth).catch(console.error);
+    const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
-  // 2. Firestore Sync
+  // 2. データ取得 & 初期サンプル曲の投入
   useEffect(() => {
     if (!user) return;
+
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     
+    const ensureInitialData = async () => {
+      const snapshot = await getDocs(tracksRef);
+      if (snapshot.empty) {
+        const samples = [
+          {
+            title: "Chill Lofi Vibes",
+            artist: "Lofi Girl",
+            url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+            cover: "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=400&h=400&fit=crop",
+            genre: "Chill",
+            createdAt: serverTimestamp()
+          },
+          {
+            title: "Techno Energy",
+            artist: "Cyber Sonic",
+            url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+            cover: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=400&h=400&fit=crop",
+            genre: "Energy",
+            createdAt: serverTimestamp()
+          },
+          {
+            title: "Deep Focus Piano",
+            artist: "Mindfulness",
+            url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+            cover: "https://images.unsplash.com/photo-1520529682724-245b3dd3a48e?w=400&h=400&fit=crop",
+            genre: "Focus",
+            createdAt: serverTimestamp()
+          }
+        ];
+        for (const s of samples) {
+          await addDoc(tracksRef, s);
+        }
+      }
+    };
+
+    ensureInitialData();
+
     const unsubscribe = onSnapshot(query(tracksRef), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTracks(data);
       setLoading(false);
       if (data.length > 0 && !currentTrack) setCurrentTrack(data[0]);
     });
-    
+
     return () => unsubscribe();
   }, [user]);
 
-  // 3. Filtering Logic by Playlist
+  // 3. プレイリストによるフィルタリング
   useEffect(() => {
     if (activePlaylist === 'All') {
       setFilteredTracks(tracks);
     } else {
-      // track.genre または track.playlist フィールドに基づいてフィルタリング
-      const filtered = tracks.filter(t => t.genre === activePlaylist || t.playlist === activePlaylist);
-      setFilteredTracks(filtered);
+      setFilteredTracks(tracks.filter(t => t.genre === activePlaylist));
     }
   }, [tracks, activePlaylist]);
 
-  // --- Rich Results (JSON-LD) ---
-  useEffect(() => {
-    if (!currentTrack) return;
-    document.title = `${currentTrack.title} - ${currentTrack.artist} | FireBeat`;
-    const structuredData = {
-      "@context": "https://schema.org",
-      "@type": "MusicRecording",
-      "name": currentTrack.title,
-      "byArtist": { "@type": "MusicGroup", "name": currentTrack.artist },
-      "image": currentTrack.cover,
-      "url": window.location.href,
-      "duration": "PT3M45S"
-    };
-    const scriptId = 'rich-result-script';
-    let script = document.getElementById(scriptId);
-    if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.type = 'application/ld+json';
-      document.head.appendChild(script);
-    }
-    script.text = JSON.stringify(structuredData);
-  }, [currentTrack]);
-
-  // 4. Audio Control Logic
-  const togglePlay = () => setIsPlaying(!isPlaying);
-
+  // 4. 再生ロジック (同じ曲ならトグル停止)
   const handleTrackClick = (track) => {
     if (currentTrack?.id === track.id) {
       setIsPlaying(!isPlaying);
@@ -109,7 +116,6 @@ export default function App() {
 
   const handleNext = () => {
     const list = filteredTracks.length > 0 ? filteredTracks : tracks;
-    if (list.length === 0) return;
     const idx = list.findIndex(t => t.id === currentTrack?.id);
     setCurrentTrack(list[(idx + 1) % list.length]);
     setIsPlaying(true);
@@ -117,7 +123,6 @@ export default function App() {
 
   const handlePrev = () => {
     const list = filteredTracks.length > 0 ? filteredTracks : tracks;
-    if (list.length === 0) return;
     const idx = list.findIndex(t => t.id === currentTrack?.id);
     setCurrentTrack(list[(idx - 1 + list.length) % list.length]);
     setIsPlaying(true);
@@ -136,7 +141,7 @@ export default function App() {
 
   useEffect(() => {
     const audio = audioRef.current;
-    audio.volume = volume / 100;
+    audio.volume = volume;
     const up = () => audio.duration && setProgress((audio.currentTime / audio.duration) * 100);
     audio.addEventListener('timeupdate', up);
     audio.addEventListener('ended', handleNext);
@@ -147,160 +152,96 @@ export default function App() {
   }, [tracks, currentTrack, volume, filteredTracks]);
 
   return (
-    <div className="flex h-screen bg-black text-zinc-100 overflow-hidden font-['Inter'] selection:bg-indigo-500/30">
-      
-      {/* データベース同期インジケーター */}
-      <div className="fixed top-6 right-6 z-[100] flex items-center gap-3 bg-black/40 backdrop-blur-xl border border-white/5 py-1.5 px-3.5 rounded-full shadow-2xl">
-        <div className={`w-1.5 h-1.5 rounded-full ${isSynced ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-amber-500 animate-pulse'}`} />
-        <span className="text-[9px] font-black uppercase tracking-[0.15em] opacity-50">
-          {isSynced ? 'Live' : 'Syncing'}
-        </span>
-      </div>
-
+    <div className="flex h-screen bg-neutral-950 text-white font-sans overflow-hidden">
       {/* サイドバー */}
-      <aside className="w-64 bg-black/60 backdrop-blur-2xl p-6 hidden lg:flex flex-col gap-10 border-r border-white/5 z-20 overflow-y-auto">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center shadow-xl shadow-indigo-600/20">
-            <Music size={20} className="text-white" />
-          </div>
-          <span className="font-black text-xl tracking-tighter italic">FIREBEAT</span>
+      <aside className="w-64 bg-black p-6 flex flex-col gap-8 hidden md:flex border-r border-neutral-800 overflow-y-auto">
+        <div className="flex items-center gap-2 text-indigo-500 font-bold text-2xl px-2">
+          <Music size={32} />
+          <span>FireBeat</span>
         </div>
         
-        <nav className="space-y-8">
-          <div className="space-y-3">
-            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] px-3">Discover</p>
-            <NavItem 
-              icon={<Home size={18} />} 
-              label="All Songs" 
-              active={activePlaylist === 'All'} 
-              onClick={() => setActivePlaylist('All')}
-            />
+        <nav className="flex flex-col gap-6 text-sm">
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest px-2">メイン</p>
+            <NavItem icon={<Home size={20} />} label="すべて表示" active={activePlaylist === 'All'} onClick={() => setActivePlaylist('All')} />
           </div>
 
-          <div className="space-y-3">
-            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] px-3">Playlists</p>
-            <NavItem 
-              icon={<ListMusic size={18} />} 
-              label="Chill Beats" 
-              active={activePlaylist === 'Chill'} 
-              onClick={() => setActivePlaylist('Chill')}
-            />
-            <NavItem 
-              icon={<ListMusic size={18} />} 
-              label="Energy Mix" 
-              active={activePlaylist === 'Energy'} 
-              onClick={() => setActivePlaylist('Energy')}
-            />
-            <NavItem 
-              icon={<ListMusic size={18} />} 
-              label="Focus Mode" 
-              active={activePlaylist === 'Focus'} 
-              onClick={() => setActivePlaylist('Focus')}
-            />
-          </div>
-          
-          <div className="space-y-3">
-            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] px-3">Library</p>
-            <NavItem icon={<Heart size={18} />} label="Favorites" />
-            <NavItem icon={<Library size={18} />} label="Albums" />
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest px-2">プレイリスト</p>
+            <NavItem icon={<ListMusic size={20} />} label="Chill Beats" active={activePlaylist === 'Chill'} onClick={() => setActivePlaylist('Chill')} />
+            <NavItem icon={<ListMusic size={20} />} label="Energy Mix" active={activePlaylist === 'Energy'} onClick={() => setActivePlaylist('Energy')} />
+            <NavItem icon={<ListMusic size={20} />} label="Focus Mode" active={activePlaylist === 'Focus'} onClick={() => setActivePlaylist('Focus')} />
           </div>
         </nav>
       </aside>
 
-      {/* メインエリア */}
-      <main className="flex-1 overflow-y-auto bg-transparent p-6 md:p-10 pb-36">
-        <header className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6 mb-12">
+      {/* メイン */}
+      <main className="flex-1 overflow-y-auto bg-gradient-to-b from-neutral-900 to-black p-8 pb-32">
+        <header className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase mb-2">
-              {activePlaylist === 'All' ? 'Your' : activePlaylist} <span className="text-indigo-500 italic">{activePlaylist === 'All' ? 'Collection' : 'Vibe'}</span>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {activePlaylist === 'All' ? 'Your Library' : activePlaylist}
             </h1>
-            <p className="text-zinc-500 text-[10px] font-black tracking-[0.3em] uppercase opacity-70">
-              {filteredTracks.length} tracks found in this view.
-            </p>
+            <p className="text-neutral-500 text-xs mt-1">{filteredTracks.length} tracks found.</p>
           </div>
         </header>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-40 opacity-30">
-            <div className="w-8 h-8 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-          </div>
+          <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" /></div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
             {filteredTracks.map(track => (
               <div 
                 key={track.id} 
                 onClick={() => handleTrackClick(track)}
-                className="group relative cursor-pointer"
-                role="button"
+                className={`group p-4 rounded-2xl transition-all cursor-pointer relative ${currentTrack?.id === track.id ? 'bg-indigo-600/20 ring-1 ring-indigo-500' : 'bg-neutral-900/40 hover:bg-neutral-800'}`}
               >
-                <div className={`relative aspect-square mb-4 rounded-3xl overflow-hidden transition-all duration-500 ease-out ${currentTrack?.id === track.id ? 'scale-105 shadow-[0_20px_40px_rgba(0,0,0,0.6)] ring-1 ring-indigo-500/50' : 'bg-zinc-900 shadow-lg group-hover:scale-[1.02]'}`}>
-                  {track.cover ? (
-                    <img src={track.cover} className={`w-full h-full object-cover transition duration-700 group-hover:scale-105 ${currentTrack?.id === track.id && isPlaying ? 'opacity-40' : 'group-hover:opacity-50'}`} alt={track.title} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-800"><Music size={32} /></div>
-                  )}
-                  <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                    <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 shadow-2xl">
-                      {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} className="ml-1" />}
-                    </div>
+                <div className="relative aspect-square mb-4 overflow-hidden rounded-xl bg-neutral-800 shadow-xl">
+                  {track.cover && <img src={track.cover} alt="" className="w-full h-full object-cover transition duration-500 group-hover:scale-110" />}
+                  <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} />}
                   </div>
                 </div>
-                <div className="px-1">
-                   <h3 className={`font-bold truncate text-sm tracking-tight transition-colors ${currentTrack?.id === track.id ? 'text-indigo-400' : 'group-hover:text-indigo-400'}`}>{track.title}</h3>
-                   <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.1em] mt-1">{track.artist}</p>
-                </div>
+                <h3 className="font-bold truncate text-sm">{track.title}</h3>
+                <p className="text-[10px] text-neutral-500 truncate mt-1 uppercase tracking-wider">{track.artist}</p>
               </div>
             ))}
           </div>
         )}
       </main>
 
-      {/* コンパクト・プレイヤーバー */}
-      <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-5xl h-20 bg-zinc-950/80 backdrop-blur-3xl border border-white/5 rounded-3xl px-8 flex items-center justify-between z-50 shadow-[0_30px_60px_rgba(0,0,0,0.8)]">
-        <div className="w-1/4 flex items-center gap-4">
+      {/* プレイヤー */}
+      <footer className="fixed bottom-0 left-0 right-0 h-24 bg-black/95 backdrop-blur-xl border-t border-neutral-900 px-6 flex items-center justify-between z-50">
+        <div className="flex items-center gap-4 w-1/4">
           {currentTrack && (
-            <>
-              <div className="w-12 h-12 rounded-xl overflow-hidden shadow-2xl ring-1 ring-white/5 shrink-0">
-                <img src={currentTrack.cover} alt={currentTrack.title} className="w-full h-full object-cover" />
+            <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4">
+              <img src={currentTrack.cover} className="w-12 h-12 rounded shadow-lg" alt="" />
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold truncate">{currentTrack.title}</p>
+                <p className="text-[10px] text-neutral-500 truncate">{currentTrack.artist}</p>
               </div>
-              <div className="truncate hidden sm:block">
-                <p className="text-[13px] font-bold truncate tracking-tight">{currentTrack.title}</p>
-                <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mt-0.5">{currentTrack.artist}</p>
-              </div>
-            </>
+            </div>
           )}
         </div>
 
-        <div className="flex-1 flex flex-col items-center gap-2 px-6">
+        <div className="flex flex-col items-center gap-2 flex-1 max-w-2xl">
           <div className="flex items-center gap-6">
-            <button onClick={handlePrev} className="text-zinc-600 hover:text-white transition-all transform active:scale-75"><SkipBack size={20} fill="currentColor" /></button>
-            <button 
-              onClick={togglePlay} 
-              className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 active:scale-90 transition-all shadow-xl"
-            >
-              {isPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-0.5" />}
+            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition"><SkipBack size={20} fill="currentColor" /></button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 transition active:scale-90 shadow-xl">
+              {isPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-1" />}
             </button>
-            <button onClick={handleNext} className="text-zinc-600 hover:text-white transition-all transform active:scale-75"><SkipForward size={20} fill="currentColor" /></button>
+            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition"><SkipForward size={20} fill="currentColor" /></button>
           </div>
-          <div className="w-full flex items-center gap-3 max-w-md">
-             <div className="flex-1 bg-white/5 h-1 rounded-full overflow-hidden cursor-pointer group relative">
-                <div className="bg-indigo-500 h-full transition-all duration-300 relative rounded-full" style={{ width: `${progress}%` }}>
-                   <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-             </div>
+          <div className="w-full bg-neutral-800 h-1 rounded-full overflow-hidden">
+            <div className="bg-indigo-500 h-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
         </div>
 
-        <div className="w-1/4 flex justify-end items-center gap-4">
-          <div className="flex items-center gap-3 group hidden md:flex">
-            <Volume2 size={16} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-            <div className="w-20 bg-white/5 h-1 rounded-full overflow-hidden">
-              <div className="bg-zinc-600 h-full group-hover:bg-indigo-500 transition-all" style={{ width: `${volume}%` }} />
-            </div>
+        <div className="w-1/4 flex justify-end items-center gap-3">
+          <Volume2 size={16} className="text-neutral-500" />
+          <div className="w-24 bg-neutral-800 h-1 rounded-full">
+            <div className="bg-white/60 h-full" style={{ width: `${volume * 100}%` }} />
           </div>
-          <button className="text-zinc-700 hover:text-white transition-colors">
-            <MoreHorizontal size={18} />
-          </button>
         </div>
       </footer>
     </div>
@@ -311,12 +252,10 @@ function NavItem({ icon, label, active = false, onClick }) {
   return (
     <div 
       onClick={onClick}
-      className={`flex items-center gap-3.5 py-1.5 px-3 cursor-pointer transition-all duration-300 rounded-xl group ${active ? 'bg-indigo-500/20 text-white shadow-sm ring-1 ring-indigo-500/30' : 'text-zinc-600 hover:text-zinc-300 hover:bg-white/5'}`}
+      className={`flex items-center gap-4 px-3 py-2 cursor-pointer transition rounded-lg ${active ? 'bg-indigo-600/10 text-indigo-400' : 'text-neutral-500 hover:text-white hover:bg-neutral-900'}`}
     >
-      <div className={`transition-all duration-300 ${active ? 'text-indigo-400' : 'group-hover:text-zinc-300'}`}>
-        {icon}
-      </div>
-      <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${active ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}>{label}</span>
+      {icon}
+      <span className="font-semibold">{label}</span>
     </div>
   );
 }
