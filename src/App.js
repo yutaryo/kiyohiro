@@ -33,17 +33,27 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activePlaylist, setActivePlaylist] = useState('All');
   const [error, setError] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
   const audioRef = useRef(new Audio());
 
+  // プレイリストカラーをより明るくエネルギッシュに変更
   const playlists = [
-    { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'from-fuchsia-600 to-violet-600', glow: 'rgba(192, 38, 211, 0.1)' },
-    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'from-rose-500 to-orange-400', glow: 'rgba(244, 63, 94, 0.1)' },
-    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={18} />, color: 'from-amber-500 to-yellow-300', glow: 'rgba(245, 158, 11, 0.1)' },
-    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={18} />, color: 'from-violet-500 to-cyan-400', glow: 'rgba(139, 92, 246, 0.1)' },
-    { id: 'Night', label: 'Midnight City', icon: <Moon size={18} />, color: 'from-indigo-600 to-blue-400', glow: 'rgba(79, 70, 229, 0.1)' },
-    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'from-emerald-500 to-teal-400', glow: 'rgba(16, 185, 129, 0.1)' },
+    { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'from-fuchsia-400 to-indigo-500', glow: 'rgba(192, 38, 211, 0.4)', text: 'fuchsia' },
+    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'from-rose-400 to-pink-600', glow: 'rgba(251, 113, 133, 0.4)', text: 'rose' },
+    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={18} />, color: 'from-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.4)', text: 'yellow' },
+    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={18} />, color: 'from-cyan-300 to-blue-500', glow: 'rgba(103, 232, 249, 0.4)', text: 'cyan' },
+    { id: 'Night', label: 'Midnight City', icon: <Moon size={18} />, color: 'from-violet-400 to-purple-800', glow: 'rgba(167, 139, 250, 0.4)', text: 'violet' },
+    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'from-emerald-300 to-teal-500', glow: 'rgba(110, 231, 183, 0.4)', text: 'emerald' },
   ];
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      setMousePos({ x: (e.clientX / window.innerWidth - 0.5) * 30, y: (e.clientY / window.innerHeight - 0.5) * 30 });
+    };
+    window.addEventListener('mousemove', handleMove);
+    return () => window.removeEventListener('mousemove', handleMove);
+  }, []);
 
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
@@ -112,7 +122,7 @@ export default function App() {
       audio.load();
       if (isPlaying) {
         audio.play().catch(e => {
-          setError("Playback Error: File unavailable");
+          setError("Playback Error");
           setIsPlaying(false);
         });
       }
@@ -122,7 +132,6 @@ export default function App() {
   useEffect(() => {
     if (isPlaying) {
       audioRef.current.play().catch(e => {
-        setError("Playback Error: Failed to play");
         setIsPlaying(false);
       });
     } else {
@@ -142,45 +151,50 @@ export default function App() {
     };
   }, [tracks, currentTrack, volume, filteredTracks]);
 
-  // 現在のプレイリストの設定を取得
   const currentPlaylistStyle = playlists.find(p => p.id === activePlaylist) || playlists[0];
 
   return (
-    <div className="flex h-screen bg-neutral-950 text-white font-sans overflow-hidden transition-colors duration-1000">
+    <div className="flex h-screen bg-[#020202] text-white font-sans overflow-hidden transition-colors duration-1000">
       
-      {/* 1. 動く背景エフェクト (Background Glows) */}
+      {/* Background Glows */}
       <div 
-        className="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] blur-[140px] rounded-full pointer-events-none animate-float transition-colors duration-1000" 
-        style={{ backgroundColor: currentPlaylistStyle.glow }}
+        className="fixed top-[-10%] left-[-10%] w-[80%] h-[80%] blur-[200px] rounded-full pointer-events-none transition-all duration-1000 opacity-60" 
+        style={{ 
+          backgroundColor: currentPlaylistStyle.glow,
+          transform: `translate(${mousePos.x}px, ${mousePos.y}px)`
+        }}
       />
       <div 
-        className="fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] blur-[140px] rounded-full pointer-events-none animate-float-reverse transition-colors duration-1000" 
-        style={{ backgroundColor: currentPlaylistStyle.glow }}
+        className="fixed bottom-[-10%] right-[-10%] w-[80%] h-[80%] blur-[200px] rounded-full pointer-events-none transition-all duration-1000 opacity-60" 
+        style={{ 
+          backgroundColor: currentPlaylistStyle.glow,
+          transform: `translate(${-mousePos.x}px, ${-mousePos.y}px)`
+        }}
       />
 
-      {/* 3. タイポグラフィ・デコレーション (Background Text) */}
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden opacity-[0.03] z-0">
-        <h2 className="text-[25vw] font-black uppercase whitespace-nowrap leading-none tracking-tighter">
+      {/* Dynamic Background Text (Colored) */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0">
+        <h2 key={currentTrack?.id} className={`text-[30vw] font-black uppercase whitespace-nowrap leading-none tracking-tighter opacity-[0.03] animate-text-reveal transition-colors duration-1000 text-${currentPlaylistStyle.text}-400`}>
           {currentTrack?.artist || "AKIKO"}
         </h2>
       </div>
 
       {/* Sidebar */}
-      <aside className="w-72 bg-black/40 backdrop-blur-3xl p-8 flex flex-col gap-10 hidden lg:flex border-r border-white/5 z-20">
+      <aside className="w-72 bg-black/60 backdrop-blur-3xl p-8 flex flex-col gap-10 hidden lg:flex border-r border-white/5 z-20 relative">
         <div className="flex items-center gap-3 px-2">
-          <div className={`w-10 h-10 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-xl flex items-center justify-center shadow-lg transition-all duration-1000`}>
+          <div className={`w-11 h-11 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.1)] transition-all duration-1000 ring-2 ring-white/20`}>
             <Sparkles size={22} className="text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="font-black text-lg tracking-tight leading-none">AKIKO</span>
-            <span className="text-[10px] text-neutral-500 font-bold tracking-[0.2em] uppercase">Sound System</span>
+            <span className="font-black text-xl tracking-tight leading-none">AKIKO</span>
+            <span className="text-[10px] text-neutral-500 font-bold tracking-[0.2em] uppercase mt-1">Sound Vision</span>
           </div>
         </div>
         
-        <nav className="flex flex-col gap-8 text-sm">
+        <nav className="flex flex-col gap-10 text-sm">
           <div className="space-y-4">
-            <p className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Explore</p>
-            <div className="space-y-1">
+            <p className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Main</p>
+            <div className="space-y-2">
               <NavItem 
                 icon={playlists[0].icon} 
                 label={playlists[0].label} 
@@ -191,8 +205,8 @@ export default function App() {
           </div>
 
           <div className="space-y-4">
-            <p className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Playlists</p>
-            <div className="space-y-1">
+            <p className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Filter by Vibe</p>
+            <div className="space-y-2">
               {playlists.filter(p => p.id !== 'All').map(p => (
                 <NavItem 
                   key={p.id}
@@ -208,57 +222,68 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-transparent p-8 lg:p-12 pb-44 z-10 relative">
-        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="flex-1">
-            <div className={`inline-block px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 transition-all`}>
-              Current Collection
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto bg-transparent p-8 lg:p-14 pb-64 z-10 relative scroll-smooth">
+        <header className="mb-14 flex flex-col md:flex-row md:items-end justify-between gap-8">
+          <div className="flex-1 animate-slide-in">
+            <div className={`inline-block px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[11px] font-black uppercase tracking-widest mb-6 backdrop-blur-xl`}>
+              {tracks.length} Masterpieces
             </div>
-            <h1 className="text-5xl lg:text-7xl font-black tracking-tighter">
-              {currentPlaylistStyle.label} <span className={`bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic transition-all duration-1000`}>Vibe</span>
+            <h1 className="text-7xl lg:text-9xl font-black tracking-tighter leading-none">
+              {currentPlaylistStyle.label} <br/>
+              <span className={`bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic transition-all duration-1000`}>
+                Flow
+              </span>
             </h1>
           </div>
         </header>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-white/20" />
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <div className="w-12 h-12 border-4 border-white/5 border-t-white/60 rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-x-10 gap-y-16">
             {filteredTracks.map(track => (
               <div 
                 key={track.id} 
                 onClick={() => handleTrackClick(track)}
                 className="group relative cursor-pointer"
               >
-                {/* 2. レコード回転エフェクト (Record Spin) */}
-                <div className="relative mb-5 flex items-center justify-center">
-                  {/* Vinyl Disk Background (Hidden initially, slides out if current) */}
-                  <div className={`absolute left-4 w-full h-full bg-neutral-900 rounded-full border-[8px] border-neutral-800 flex items-center justify-center transition-all duration-700 shadow-2xl z-0 ${currentTrack?.id === track.id && isPlaying ? 'translate-x-6 rotate-180 animate-slow-spin opacity-100' : 'translate-x-0 opacity-0'}`}>
-                     <div className="w-12 h-12 rounded-full border-2 border-neutral-700 bg-neutral-900" />
-                  </div>
+                {/* Image & Glow Effect */}
+                <div className="relative mb-6">
                   
-                  {/* Main Cover */}
-                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-[2.5rem] transition-all duration-700 ${currentTrack?.id === track.id ? 'scale-105 shadow-[0_25px_60px_rgba(0,0,0,0.6)] ring-2 ring-white/20' : 'hover:scale-[1.03] shadow-2xl'}`}>
+                  {/* Active Aura Glow (後ろで光る) */}
+                  <div className={`absolute -inset-4 bg-gradient-to-tr ${currentPlaylistStyle.color} blur-3xl opacity-0 transition-opacity duration-700 pointer-events-none rounded-full ${currentTrack?.id === track.id && isPlaying ? 'opacity-40 animate-pulse-slow' : 'group-hover:opacity-20'}`} />
+                  
+                  {/* Main Cover Card */}
+                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-[2rem] transition-all duration-500 ${currentTrack?.id === track.id ? `scale-105 shadow-[0_20px_60px_rgba(0,0,0,0.8)] ring-4 ring-white/30` : 'hover:scale-105 shadow-2xl ring-1 ring-white/5 group-hover:ring-white/20'}`}>
                     {track.cover ? (
-                      <img src={track.cover} alt="" className={`w-full h-full object-cover transition-all duration-1000 group-hover:scale-110 ${currentTrack?.id === track.id && isPlaying ? 'animate-slow-spin' : ''}`} />
+                      <img src={track.cover} alt="" className={`w-full h-full object-cover transition-all duration-1000 group-hover:scale-110`} />
                     ) : (
-                      <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={40} className="text-neutral-700" /></div>
+                      <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={48} className="text-neutral-700" /></div>
                     )}
-                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-500 ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                      <div className="w-16 h-16 bg-white/10 backdrop-blur-2xl rounded-full flex items-center justify-center border border-white/20">
-                        {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={28} /> : <Play fill="white" size={28} className="ml-1" />}
+                    
+                    {/* Active Overlay Tint */}
+                    {currentTrack?.id === track.id && (
+                      <div className={`absolute inset-0 bg-gradient-to-t ${currentPlaylistStyle.color} opacity-40 mix-blend-overlay`} />
+                    )}
+
+                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-500 ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      <div className="w-20 h-20 bg-white/20 backdrop-blur-3xl rounded-full flex items-center justify-center border border-white/40 shadow-2xl scale-90 group-hover:scale-100 transition-transform">
+                        {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} className="ml-1" />}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="px-3">
-                  <h3 className={`font-black truncate text-base tracking-tight transition-colors ${currentTrack?.id === track.id ? 'text-white' : 'text-neutral-400 group-hover:text-white'}`}>{track.title}</h3>
-                  <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
+                <div className="px-2 transition-transform duration-300 group-hover:translate-x-1">
+                  <h3 className={`font-black truncate text-lg tracking-tight transition-all duration-300 ${currentTrack?.id === track.id ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'text-neutral-400 group-hover:text-white'}`}>
+                    {track.title}
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
                     {track.artist}
+                    {currentTrack?.id === track.id && isPlaying && <div className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${currentPlaylistStyle.color} animate-ping`} />}
                   </p>
                 </div>
               </div>
@@ -267,91 +292,109 @@ export default function App() {
         )}
       </main>
 
-      {/* Player Bar */}
-      <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[94%] max-w-6xl h-24 bg-neutral-900/60 backdrop-blur-3xl border border-white/5 rounded-[3rem] px-10 flex items-center justify-between z-50 shadow-[0_40px_100px_rgba(0,0,0,0.8)]">
-        <div className="flex items-center gap-5 w-1/4">
+      {/* Floating Control Bar */}
+      <footer className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[94%] max-w-7xl h-24 bg-black/70 backdrop-blur-[50px] border border-white/10 rounded-[3.5rem] px-14 flex items-center justify-between z-50 shadow-[0_50px_120px_rgba(0,0,0,1)] ring-1 ring-white/10">
+        
+        <div className="flex items-center gap-6 w-1/4 min-w-0">
           {currentTrack && (
             <>
-              <div className={`w-14 h-14 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 shrink-0 ${isPlaying ? 'animate-pulse' : ''}`}>
+              <div className={`w-14 h-14 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(255,255,255,0.1)] ring-2 ring-white/20 shrink-0 ${isPlaying ? 'animate-pulse' : ''}`}>
                 <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />
               </div>
               <div className="hidden sm:block overflow-hidden">
-                <p className="text-sm font-black truncate">{currentTrack.title}</p>
-                <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">{currentTrack.artist}</p>
+                <p className="text-[15px] font-black truncate text-white leading-tight">{currentTrack.title}</p>
+                <p className="text-[10px] text-neutral-500 font-black uppercase tracking-[0.2em] mt-1.5">{currentTrack.artist}</p>
               </div>
             </>
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-2 flex-1 max-w-xl px-6 relative">
+        <div className="flex flex-col items-center gap-2 flex-1 max-w-2xl px-12 relative">
           
-          {/* 5. メカニカル・レベルメーター (Fake Mechanical Meter) */}
-          <div className="flex gap-1 items-end h-8 mb-1 opacity-20 pointer-events-none">
-            {[...Array(20)].map((_, i) => (
+          {/* Fake Visualizer (Luminous) */}
+          <div className="flex gap-1.5 items-end h-7 mb-1 opacity-40 pointer-events-none">
+            {[...Array(28)].map((_, i) => (
               <div 
                 key={i}
-                className={`w-1 bg-white transition-all duration-300 ${isPlaying ? 'animate-fake-bounce' : 'h-1'}`}
+                className={`w-[3px] bg-gradient-to-t ${currentPlaylistStyle.color} transition-all duration-300 rounded-full ${isPlaying ? 'animate-fake-bounce' : 'h-1'}`}
                 style={{ 
-                  animationDelay: `${i * 0.05}s`,
-                  height: isPlaying ? 'auto' : '4px'
+                  animationDelay: `${i * 0.03}s`,
+                  height: isPlaying ? 'auto' : '3px'
                 }}
               />
             ))}
           </div>
 
-          <div className="flex items-center gap-8">
-            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition active:scale-75"><SkipBack size={20} fill="currentColor" /></button>
+          <div className="flex items-center gap-12">
+            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all hover:scale-125 active:scale-90"><SkipBack size={22} fill="currentColor" /></button>
             <button 
               onClick={() => setIsPlaying(!isPlaying)} 
-              className={`w-12 h-12 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 transition active:scale-95 shadow-xl`}
+              className={`w-16 h-16 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 transition shadow-[0_0_40px_rgba(255,255,255,0.4)] active:scale-95`}
             >
-              {isPlaying ? <Pause size={22} fill="black" /> : <Play size={22} fill="black" className="ml-1" />}
+              {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" className="ml-1" />}
             </button>
-            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition active:scale-75"><SkipForward size={20} fill="currentColor" /></button>
+            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-all hover:scale-125 active:scale-90"><SkipForward size={22} fill="currentColor" /></button>
           </div>
           
-          <div className="w-full flex items-center gap-3">
-            <span className="text-[9px] font-black text-neutral-600 w-8 text-right tabular-nums">
+          <div className="w-full flex items-center gap-4 group">
+            <span className="text-[10px] font-black text-neutral-500 w-10 text-right tabular-nums">
               {Math.floor(audioRef.current.currentTime / 60)}:{String(Math.floor(audioRef.current.currentTime % 60)).padStart(2, '0')}
             </span>
-            <div className="flex-1 bg-white/5 h-1.5 rounded-full overflow-hidden relative">
-              <div className={`h-full rounded-full transition-all duration-300 bg-gradient-to-r ${currentPlaylistStyle.color}`} style={{ width: `${progress}%` }} />
+            <div className="flex-1 bg-white/10 h-2 rounded-full overflow-hidden relative cursor-pointer ring-1 ring-white/5">
+              <div className={`h-full rounded-full transition-all duration-300 bg-gradient-to-r ${currentPlaylistStyle.color} shadow-[0_0_20px_white]`} style={{ width: `${progress}%` }} />
             </div>
-            <span className="text-[9px] font-black text-neutral-600 w-8 tabular-nums">
+            <span className="text-[10px] font-black text-neutral-500 w-10 tabular-nums">
               {audioRef.current.duration ? `${Math.floor(audioRef.current.duration / 60)}:${String(Math.floor(audioRef.current.duration % 60)).padStart(2, '0')}` : '0:00'}
             </span>
           </div>
         </div>
 
-        <div className="w-1/4 flex justify-end items-center gap-4">
-          <Volume2 size={16} className="text-neutral-600" />
-          <div className="w-20 bg-white/5 h-1 rounded-full overflow-hidden">
-             <div className="bg-white/20 h-full" style={{ width: `${volume * 100}%` }} />
+        <div className="w-1/4 flex justify-end items-center gap-6">
+          <div className="flex items-center gap-4">
+            <Volume2 size={20} className="text-neutral-500" />
+            <div className="w-28 bg-white/10 h-1.5 rounded-full overflow-hidden relative group cursor-pointer border border-white/5">
+               <div className="bg-white/40 h-full rounded-full group-hover:bg-white transition-colors" style={{ width: `${volume * 100}%` }} />
+            </div>
           </div>
         </div>
       </footer>
 
+      {/* Global Styles & Animations */}
       <style>{`
         @keyframes float {
           0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(5%, 10%) scale(1.1); }
+          50% { transform: translate(3%, 4%) scale(1.1); }
         }
         @keyframes float-reverse {
           0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-5%, -10%) scale(1.1); }
-        }
-        @keyframes slow-spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          50% { transform: translate(-3%, -4%) scale(1.1); }
         }
         @keyframes fake-bounce {
-          0%, 100% { height: 4px; }
-          50% { height: 24px; }
+          0%, 100% { height: 3px; opacity: 0.2; }
+          50% { height: 26px; opacity: 1; }
         }
-        .animate-float { animation: float 15s ease-in-out infinite; }
-        .animate-float-reverse { animation: float-reverse 20s ease-in-out infinite; }
-        .animate-slow-spin { animation: slow-spin 10s linear infinite; }
-        .animate-fake-bounce { animation: fake-bounce 0.6s ease-in-out infinite; }
+        @keyframes text-reveal {
+          from { transform: translateY(40px) scale(0.9); opacity: 0; }
+          to { transform: translateY(0) scale(1); opacity: 0.04; }
+        }
+        @keyframes slide-in {
+          from { transform: translateX(-20px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes pulse-slow {
+          0%, 100% { transform: scale(1); opacity: 0.4; filter: blur(40px); }
+          50% { transform: scale(1.1); opacity: 0.6; filter: blur(60px); }
+        }
+        .animate-float { animation: float 25s ease-in-out infinite; }
+        .animate-float-reverse { animation: float-reverse 30s ease-in-out infinite; }
+        .animate-fake-bounce { animation: fake-bounce 0.5s ease-in-out infinite; }
+        .animate-text-reveal { animation: text-reveal 2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-slide-in { animation: slide-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+        
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
       `}</style>
     </div>
   );
@@ -361,15 +404,17 @@ function NavItem({ icon, label, active = false, onClick, colorClass = "from-fuch
   return (
     <div 
       onClick={onClick}
-      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-all duration-300 rounded-2xl group ${active ? 'bg-white/5 text-white ring-1 ring-white/10 shadow-lg' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'}`}
+      className={`flex items-center justify-between px-6 py-4 cursor-pointer transition-all duration-500 rounded-[2rem] group relative overflow-hidden ${active ? 'bg-white/10 text-white shadow-[0_0_40px_rgba(255,255,255,0.05)] ring-2 ring-white/20' : 'text-neutral-500 hover:text-neutral-100 hover:bg-white/5'}`}
     >
-      <div className="flex items-center gap-4">
-        <div className={`transition-all ${active ? 'text-white' : 'group-hover:text-neutral-300'}`}>
+      <div className="flex items-center gap-5 z-10">
+        <div className={`transition-all duration-500 ${active ? 'scale-125 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'group-hover:scale-110 group-hover:text-neutral-100'}`}>
           {icon}
         </div>
-        <span className={`font-black uppercase tracking-[0.1em] text-[10px] ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>
+        <span className={`font-black uppercase tracking-[0.2em] text-[11px] ${active ? 'opacity-100' : 'opacity-50 group-hover:opacity-100'}`}>{label}</span>
       </div>
-      {active && <div className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${colorClass} shadow-lg`} />}
+      {active && (
+        <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-r ${colorClass} shadow-[0_0_20px_rgba(255,255,255,1)] z-10 animate-pulse`} />
+      )}
     </div>
   );
 }
