@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, Library, ListMusic, Sparkles, Heart, Mic2, Search, Filter, MoreVertical, LayoutGrid } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, Library, ListMusic, Sparkles, Heart, Mic2, Search, Filter, MoreVertical, LayoutGrid, PlusSquare, Waves, Moon, Zap, Coffee, Ghost } from 'lucide-react';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -33,6 +33,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activePlaylist, setActivePlaylist] = useState('All');
   
+  // 5つの再生リストをプリセット
+  const playlists = [
+    { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'bg-white' },
+    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'bg-rose-500' },
+    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={18} />, color: 'bg-amber-500' },
+    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={18} />, color: 'bg-violet-500' },
+    { id: 'Night', label: 'Midnight City', icon: <Moon size={18} />, color: 'bg-indigo-600' },
+    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'bg-emerald-500' },
+  ];
+
   const audioRef = useRef(new Audio());
 
   useEffect(() => {
@@ -45,7 +55,6 @@ export default function App() {
     if (!user) return;
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     
-    // データ読み取りのみを実行し、自動書き込み(addDoc)は行わない設定に変更
     const unsubscribe = onSnapshot(query(tracksRef), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTracks(data);
@@ -119,12 +128,12 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-neutral-950 text-white font-sans overflow-hidden">
-      {/* Background Glow - Dynamic colors based on play state */}
+      {/* Background Glow */}
       <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-fuchsia-600/10 blur-[140px] rounded-full pointer-events-none animate-pulse" />
       <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-600/10 blur-[140px] rounded-full pointer-events-none animate-pulse" />
 
       {/* Sidebar */}
-      <aside className="w-72 bg-black/40 backdrop-blur-3xl p-8 flex flex-col gap-10 hidden lg:flex border-r border-white/5 z-20">
+      <aside className="w-72 bg-black/40 backdrop-blur-3xl p-8 flex flex-col gap-10 hidden lg:flex border-r border-white/5 z-20 overflow-y-auto">
         <div className="flex items-center gap-3 px-2">
           <div className="w-10 h-10 bg-gradient-to-tr from-fuchsia-600 to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-fuchsia-500/20">
             <Sparkles size={22} className="text-white" />
@@ -137,19 +146,32 @@ export default function App() {
         
         <nav className="flex flex-col gap-8 text-sm">
           <div className="space-y-4">
-            <p className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] px-3">Main Menu</p>
+            <p className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] px-3">Explore</p>
             <div className="space-y-1">
-              <NavItem icon={<Home size={20} />} label="Home" active={activePlaylist === 'All'} onClick={() => setActivePlaylist('All')} />
-              <NavItem icon={<Library size={20} />} label="Library" active={false} />
+              <NavItem 
+                icon={playlists[0].icon} 
+                label={playlists[0].label} 
+                active={activePlaylist === 'All'} 
+                onClick={() => setActivePlaylist('All')} 
+              />
             </div>
           </div>
 
           <div className="space-y-4">
-            <p className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] px-3">Playlists</p>
+            <div className="flex items-center justify-between px-3">
+              <p className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em]">Your Playlists</p>
+            </div>
             <div className="space-y-1">
-              <NavItem icon={<div className="w-2 h-2 rounded-full bg-rose-500" />} label="Chill" active={activePlaylist === 'Chill'} onClick={() => setActivePlaylist('Chill')} />
-              <NavItem icon={<div className="w-2 h-2 rounded-full bg-fuchsia-500" />} label="Energy" active={activePlaylist === 'Energy'} onClick={() => setActivePlaylist('Energy')} />
-              <NavItem icon={<div className="w-2 h-2 rounded-full bg-violet-500" />} label="Focus" active={activePlaylist === 'Focus'} onClick={() => setActivePlaylist('Focus')} />
+              {playlists.filter(p => p.id !== 'All').map(playlist => (
+                <NavItem 
+                  key={playlist.id}
+                  icon={playlist.icon} 
+                  label={playlist.label} 
+                  active={activePlaylist === playlist.id} 
+                  onClick={() => setActivePlaylist(playlist.id)}
+                  indicatorColor={playlist.color}
+                />
+              ))}
             </div>
           </div>
         </nav>
@@ -160,27 +182,23 @@ export default function App() {
         <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="flex-1">
             <div className="inline-block px-3 py-1 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-full text-fuchsia-400 text-[10px] font-black uppercase tracking-widest mb-4">
-              Now Browsing
+              Collection
             </div>
             <h1 className="text-5xl lg:text-6xl font-black tracking-tighter">
-              {activePlaylist === 'All' ? 'Akiko' : activePlaylist} <span className="bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-500 to-violet-400 italic">Library</span>
+              {playlists.find(p => p.id === activePlaylist)?.label} <span className="bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-500 to-violet-400 italic">Library</span>
             </h1>
           </div>
 
-          {/* Akiko Library Menu - Removed "Add" button for security */}
           <div className="flex items-center gap-2">
             <div className="flex items-center bg-white/5 border border-white/10 rounded-full px-4 py-2 text-neutral-400 focus-within:text-white focus-within:bg-white/10 transition-all mr-2">
               <Search size={16} className="mr-2" />
-              <input type="text" placeholder="Search music..." className="bg-transparent border-none outline-none text-xs w-32 md:w-48 placeholder:text-neutral-600" />
+              <input type="text" placeholder="Search tracks..." className="bg-transparent border-none outline-none text-xs w-32 md:w-48 placeholder:text-neutral-600" />
             </div>
             <button className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10 transition-all">
               <LayoutGrid size={18} />
             </button>
             <button className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10 transition-all">
               <Filter size={18} />
-            </button>
-            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10 transition-all">
-              <MoreVertical size={18} />
             </button>
           </div>
         </header>
@@ -191,7 +209,7 @@ export default function App() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8">
-            {filteredTracks.map(track => (
+            {filteredTracks.length > 0 ? filteredTracks.map(track => (
               <div 
                 key={track.id} 
                 onClick={() => handleTrackClick(track)}
@@ -219,7 +237,12 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="col-span-full py-20 text-center opacity-40">
+                <Music size={48} className="mx-auto mb-4" />
+                <p className="font-bold uppercase tracking-widest text-xs">このプレイリストには曲がありません</p>
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -294,16 +317,19 @@ export default function App() {
   );
 }
 
-function NavItem({ icon, label, active = false, onClick }) {
+function NavItem({ icon, label, active = false, onClick, indicatorColor = 'bg-fuchsia-500' }) {
   return (
     <div 
       onClick={onClick}
-      className={`flex items-center gap-4 px-4 py-3 cursor-pointer transition-all duration-500 rounded-2xl group ${active ? 'bg-gradient-to-r from-fuchsia-600/20 to-transparent text-white ring-1 ring-fuchsia-500/30 shadow-[0_10px_30px_rgba(217,70,239,0.1)]' : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/5'}`}
+      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-all duration-500 rounded-2xl group ${active ? 'bg-gradient-to-r from-white/10 to-transparent text-white ring-1 ring-white/10 shadow-xl' : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/5'}`}
     >
-      <div className={`transition-all duration-500 ${active ? 'text-fuchsia-500 scale-110' : 'group-hover:text-neutral-300'}`}>
-        {icon}
+      <div className="flex items-center gap-4">
+        <div className={`transition-all duration-500 ${active ? 'text-fuchsia-400 scale-110' : 'group-hover:text-neutral-300'}`}>
+          {icon}
+        </div>
+        <span className={`font-black uppercase tracking-[0.15em] text-[11px] transition-opacity duration-500 ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>
       </div>
-      <span className={`font-black uppercase tracking-[0.15em] text-[11px] transition-opacity duration-500 ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>
+      {active && <div className={`w-1.5 h-1.5 rounded-full ${indicatorColor} shadow-[0_0_10px_currentColor] animate-pulse`} />}
     </div>
   );
 }
