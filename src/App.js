@@ -1,4 +1,3 @@
-
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from 'react';
@@ -38,7 +37,6 @@ export default function App() {
   
   const audioRef = useRef(new Audio());
 
-  // プレイリストカラーをより明るくエネルギッシュに変更
   const playlists = [
     { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'from-fuchsia-400 to-indigo-500', glow: 'rgba(192, 38, 211, 0.4)', text: 'fuchsia' },
     { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'from-rose-400 to-pink-600', glow: 'rgba(251, 113, 133, 0.4)', text: 'rose' },
@@ -173,7 +171,7 @@ export default function App() {
         }}
       />
 
-      {/* Dynamic Background Text (Colored) */}
+      {/* Dynamic Background Text */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0">
         <h2 key={currentTrack?.id} className={`text-[30vw] font-black uppercase whitespace-nowrap leading-none tracking-tighter opacity-[0.03] animate-text-reveal transition-colors duration-1000 text-${currentPlaylistStyle.text}-400`}>
           {currentTrack?.artist || "AKIKO"}
@@ -251,10 +249,10 @@ export default function App() {
                 onClick={() => handleTrackClick(track)}
                 className="group relative cursor-pointer"
               >
-                {/* Image & Glow Effect */}
-                <div className="relative mb-6">
+                {/* Image Container with Overlay Info */}
+                <div className="relative mb-4">
                   
-                  {/* Active Aura Glow (後ろで光る) */}
+                  {/* Active Aura Glow */}
                   <div className={`absolute -inset-4 bg-gradient-to-tr ${currentPlaylistStyle.color} blur-3xl opacity-0 transition-opacity duration-700 pointer-events-none rounded-full ${currentTrack?.id === track.id && isPlaying ? 'opacity-40 animate-pulse-slow' : 'group-hover:opacity-20'}`} />
                   
                   {/* Main Cover Card */}
@@ -265,27 +263,42 @@ export default function App() {
                       <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={48} className="text-neutral-700" /></div>
                     )}
                     
+                    {/* Shadow Gradient for Text Visibility */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+
+                    {/* Overlay Text (Artist & Title) - ALWAYS VISIBLE */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 z-20 flex flex-col gap-1 transition-transform duration-500 group-hover:translate-y-[-8px]">
+                        <p className="text-[10px] text-white/70 font-black uppercase tracking-[0.2em] leading-none mb-1">
+                            {track.artist}
+                        </p>
+                        <h3 className={`font-black text-white text-lg leading-tight line-clamp-2 ${currentTrack?.id === track.id ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]' : ''}`}>
+                            {track.title}
+                        </h3>
+                    </div>
+
                     {/* Active Overlay Tint */}
                     {currentTrack?.id === track.id && (
                       <div className={`absolute inset-0 bg-gradient-to-t ${currentPlaylistStyle.color} opacity-40 mix-blend-overlay`} />
                     )}
 
-                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-500 ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                      <div className="w-20 h-20 bg-white/20 backdrop-blur-3xl rounded-full flex items-center justify-center border border-white/40 shadow-2xl scale-90 group-hover:scale-100 transition-transform">
-                        {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} className="ml-1" />}
+                    {/* Play/Pause Button on Hover */}
+                    <div className={`absolute inset-0 bg-black/20 flex items-center justify-center transition-all duration-500 ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      <div className="w-16 h-16 bg-white/20 backdrop-blur-3xl rounded-full flex items-center justify-center border border-white/40 shadow-2xl scale-90 group-hover:scale-100 transition-transform">
+                        {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} className="ml-1" />}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="px-2 transition-transform duration-300 group-hover:translate-x-1">
-                  <h3 className={`font-black truncate text-lg tracking-tight transition-all duration-300 ${currentTrack?.id === track.id ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'text-neutral-400 group-hover:text-white'}`}>
-                    {track.title}
-                  </h3>
-                  <p className="text-[11px] text-neutral-500 font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
-                    {track.artist}
-                    {currentTrack?.id === track.id && isPlaying && <div className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${currentPlaylistStyle.color} animate-ping`} />}
-                  </p>
+                {/* Sub-label (Active indicator only) */}
+                <div className="px-2 flex items-center justify-center">
+                   {currentTrack?.id === track.id && isPlaying && (
+                     <div className="flex gap-1 items-end h-3">
+                        {[1, 2, 3].map(i => (
+                           <div key={i} className={`w-1 bg-gradient-to-r ${currentPlaylistStyle.color} rounded-full animate-fake-bounce`} style={{ animationDelay: `${i*0.1}s`, height: '100%' }} />
+                        ))}
+                     </div>
+                   )}
                 </div>
               </div>
             ))}
@@ -312,7 +325,7 @@ export default function App() {
 
         <div className="flex flex-col items-center gap-2 flex-1 max-w-2xl px-12 relative">
           
-          {/* Fake Visualizer (Luminous) */}
+          {/* Visualizer Effect */}
           <div className="flex gap-1.5 items-end h-7 mb-1 opacity-40 pointer-events-none">
             {[...Array(28)].map((_, i) => (
               <div 
@@ -354,13 +367,22 @@ export default function App() {
           <div className="flex items-center gap-4">
             <Volume2 size={20} className="text-neutral-500" />
             <div className="w-28 bg-white/10 h-1.5 rounded-full overflow-hidden relative group cursor-pointer border border-white/5">
+               <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01" 
+                value={volume} 
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+               />
                <div className="bg-white/40 h-full rounded-full group-hover:bg-white transition-colors" style={{ width: `${volume * 100}%` }} />
             </div>
           </div>
         </div>
       </footer>
 
-      {/* Global Styles & Animations */}
+      {/* Global Styles */}
       <style>{`
         @keyframes float {
           0%, 100% { transform: translate(0, 0) scale(1); }
