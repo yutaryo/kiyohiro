@@ -33,6 +33,13 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activePlaylist, setActivePlaylist] = useState('All');
   
+  const audioRef = useRef(new Audio());
+  const canvasRef = useRef(null);
+  const analyzerRef = useRef(null);
+  const animationRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const sourceRef = useRef(null);
+
   // 5つの再生リストをプリセット
   const playlists = [
     { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'bg-white' },
@@ -43,13 +50,75 @@ export default function App() {
     { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'bg-emerald-500' },
   ];
 
-  const audioRef = useRef(new Audio());
-
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
     const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
   }, []);
+
+  // Visualizer Setup
+  const initVisualizer = () => {
+    if (audioContextRef.current) return;
+    
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const context = new AudioContext();
+      const analyzer = context.createAnalyser();
+      analyzer.fftSize = 256;
+      
+      const source = context.createMediaElementSource(audioRef.current);
+      source.connect(analyzer);
+      analyzer.connect(context.destination);
+      
+      audioContextRef.current = context;
+      analyzerRef.current = analyzer;
+      sourceRef.current = source;
+      
+      draw();
+    } catch (e) {
+      console.error("Visualizer initialization failed:", e);
+    }
+  };
+
+  const draw = () => {
+    if (!canvasRef.current || !analyzerRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const analyzer = analyzerRef.current;
+    const bufferLength = analyzer.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    const renderFrame = () => {
+      animationRef.current = requestAnimationFrame(renderFrame);
+      analyzer.getByteFrequencyData(dataArray);
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let barHeight;
+      let x = 0;
+      
+      for (let i = 0; i < bufferLength; i++) {
+        barHeight = (dataArray[i] / 255) * canvas.height;
+        
+        // Gradient for bars
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+        gradient.addColorStop(0, 'rgba(192, 38, 211, 0.2)'); // Fuchsia 600
+        gradient.addColorStop(1, 'rgba(139, 92, 246, 0.8)'); // Violet 500
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+        
+        x += barWidth;
+      }
+    };
+    
+    renderFrame();
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -77,6 +146,7 @@ export default function App() {
   }, [tracks, activePlaylist]);
 
   const handleTrackClick = (track) => {
+    initVisualizer();
     if (currentTrack?.id === track.id) {
       setIsPlaying(!isPlaying);
     } else {
@@ -105,13 +175,22 @@ export default function App() {
 
   useEffect(() => {
     if (currentTrack?.url) {
+      audioRef.current.crossOrigin = "anonymous";
       audioRef.current.src = currentTrack.url;
       if (isPlaying) audioRef.current.play().catch(() => {});
     }
   }, [currentTrack]);
 
   useEffect(() => {
-    isPlaying ? audioRef.current.play().catch(() => setIsPlaying(false)) : audioRef.current.pause();
+    if (isPlaying) {
+      initVisualizer();
+      audioRef.current.play().catch(() => setIsPlaying(false));
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+    } else {
+      audioRef.current.pause();
+    }
   }, [isPlaying]);
 
   useEffect(() => {
@@ -249,7 +328,7 @@ export default function App() {
 
       {/* Player Bar */}
       <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[94%] max-w-6xl h-24 bg-neutral-900/40 backdrop-blur-[40px] border border-white/5 rounded-[3rem] px-10 flex items-center justify-between z-50 shadow-[0_40px_100px_rgba(0,0,0,0.8)]">
-        <div className="flex items-center gap-5 w-1/4">
+        <div className="flex items-center gap-5 w-1/4 overflow-hidden">
           {currentTrack && (
             <>
               <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 shrink-0 relative group">
@@ -264,7 +343,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <div className="hidden sm:block overflow-hidden">
+              <div className="hidden sm:block overflow-hidden pr-2">
                 <p className="text-sm font-black truncate tracking-tight">{currentTrack.title}</p>
                 <p className="text-[10px] text-fuchsia-500 font-bold uppercase tracking-widest mt-0.5">{currentTrack.artist}</p>
               </div>
@@ -272,8 +351,13 @@ export default function App() {
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-3 flex-1 max-w-xl px-6">
-          <div className="flex items-center gap-8">
+        <div className="flex flex-col items-center gap-2 flex-1 max-w-xl px-6 relative">
+          {/* Visualizer Canvas */}
+          <div className="absolute inset-x-0 -top-6 h-8 flex justify-center pointer-events-none opacity-50">
+             <canvas ref={canvasRef} width="400" height="32" className="w-full max-w-md" />
+          </div>
+
+          <div className="flex items-center gap-8 mt-2">
             <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition transform active:scale-75"><SkipBack size={22} fill="currentColor" /></button>
             <button 
               onClick={() => setIsPlaying(!isPlaying)} 
