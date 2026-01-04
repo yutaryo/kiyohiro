@@ -1,14 +1,13 @@
-<!DOCTYPE html>
-<html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FireBeat Music Player</title>
-    <!-- Tailwind CSS をCDNから読み込み（簡易版） -->
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-  </body>
-</html>
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+// Tailwind CSSはindex.htmlで読み込んでいるため、ここでのCSSインポートは不要です。
+// ローカル環境でApp.jsxがApp.jsという名前の場合は、適宜読み込み名を調整してください。
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
