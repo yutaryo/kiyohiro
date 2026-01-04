@@ -6,6 +6,13 @@
     <title>FireBeat Music Player</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <!-- Add Firebase products that you want to use -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
     <style>
       body { margin: 0; background-color: #000; color: white; }
       /* カスタムスクロールバー */
@@ -18,8 +25,8 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <!-- 
-      Vercel や標準的なビルド環境では、ここでの直接読み込みは不要な場合が多いですが、
-      もし public/index.html を直接編集している場合は、このファイル自体に JS を書かないようにします。
+      Vercel などのビルド環境では、npm 経由で Firebase を読み込むため、
+      この HTML 内の script タグによる読み込みはバックアップとして機能します。
     -->
   </body>
 </html>
