@@ -1,8 +1,10 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, addDoc, serverTimestamp, deleteDoc, getDocs } from 'firebase/firestore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Heart, Search, Home, Library, AlertCircle, RefreshCcw } from 'lucide-react';
+import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Search, Home, Library, AlertCircle, RefreshCcw } from 'lucide-react';
 
 // --- あなたの Firebase 設定 ---
 const firebaseConfig = {
@@ -20,8 +22,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ローカル環境(GitHub/Vercel)で使う場合は 'my-music-app' などの固定値に変更してください
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'music-player-app';
+// ローカル環境(GitHub/Vercel)で使うための固定ID
+const appId = 'firebeat-music-v1';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -39,16 +41,8 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          try {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } catch (e) {
-            console.warn("Token mismatch, falling back to anonymous...");
-            await signInAnonymously(auth);
-          }
-        } else {
-          await signInAnonymously(auth);
-        }
+        // グローバル変数がない場合でも安全に匿名認証へ移行
+        await signInAnonymously(auth);
       } catch (error) {
         setErrorLog("認証エラー: " + error.message);
       }
@@ -124,7 +118,11 @@ export default function App() {
   }, [currentTrack]);
 
   useEffect(() => {
-    isPlaying ? audioRef.current.play().catch(() => {}) : audioRef.current.pause();
+    if (isPlaying) {
+      audioRef.current.play().catch(() => setIsPlaying(false));
+    } else {
+      audioRef.current.pause();
+    }
   }, [isPlaying]);
 
   useEffect(() => {
@@ -200,7 +198,7 @@ export default function App() {
                   className={`group p-4 rounded-2xl transition-all cursor-pointer relative ${currentTrack?.id === track.id ? 'bg-indigo-600/20 ring-1 ring-indigo-500 shadow-lg shadow-indigo-500/10' : 'bg-neutral-900/50 hover:bg-neutral-800'}`}
                 >
                   <div className="relative aspect-square mb-4 overflow-hidden rounded-xl bg-neutral-800 flex items-center justify-center shadow-lg">
-                    {track.cover ? <img src={track.cover} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" /> : <Music className="text-neutral-700" />}
+                    {track.cover ? <img src={track.cover} alt="" className="w-full h-full object-cover transition duration-500 group-hover:scale-110" /> : <Music className="text-neutral-700" />}
                     <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentTrack?.id === track.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                       {currentTrack?.id === track.id && isPlaying ? <Pause fill="white" size={32} /> : <Play fill="white" size={32} />}
                     </div>
@@ -220,7 +218,7 @@ export default function App() {
           {currentTrack && (
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded bg-neutral-800 overflow-hidden shadow-inner border border-neutral-700 flex-shrink-0">
-                {currentTrack.cover && <img src={currentTrack.cover} className="w-full h-full object-cover" />}
+                {currentTrack.cover && <img src={currentTrack.cover} alt="" className="w-full h-full object-cover" />}
               </div>
               <div className="overflow-hidden">
                 <p className="text-xs font-bold truncate">{currentTrack.title}</p>
