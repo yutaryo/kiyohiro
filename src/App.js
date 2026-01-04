@@ -3,12 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query } from 'firebase/firestore';
-import { 
-  Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, 
-  Sparkles, Search, ArrowUpDown, Menu, X, Ghost, 
-  Waves, Moon, Zap, Coffee 
-} from 'lucide-react';
+import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, Library, ListMusic, Sparkles, Heart, Mic2, Search, Filter, MoreVertical, LayoutGrid, PlusSquare, Waves, Moon, Zap, Coffee, Ghost, AlertCircle, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -36,22 +32,54 @@ export default function App() {
   const [volume, setVolume] = useState(0.7);
   const [loading, setLoading] = useState(true);
   const [activePlaylist, setActivePlaylist] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('newest');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const audioRef = useRef(new Audio());
   const scrollContainerRef = useRef(null);
-  const activeTrackRef = useRef(null);
+  const trackRefs = useRef({});
 
   const playlists = [
-    { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'from-fuchsia-400 to-indigo-500', glow: 'rgba(192, 38, 211, 0.4)' },
-    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'from-rose-400 to-pink-600', glow: 'rgba(251, 113, 133, 0.4)' },
-    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={18} />, color: 'from-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.4)' },
-    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={18} />, color: 'from-cyan-300 to-blue-500', glow: 'rgba(103, 232, 249, 0.4)' },
-    { id: 'Night', label: 'Midnight City', icon: <Moon size={18} />, color: 'from-violet-400 to-purple-800', glow: 'rgba(167, 139, 250, 0.4)' },
-    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'from-emerald-300 to-teal-500', glow: 'rgba(110, 231, 183, 0.4)' },
+    { id: 'All', label: 'All Songs', icon: <Home size={22} />, color: 'from-fuchsia-400 to-indigo-500', glow: 'rgba(192, 38, 211, 0.4)', text: 'fuchsia' },
+    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={20} />, color: 'from-rose-400 to-pink-600', glow: 'rgba(251, 113, 133, 0.4)', text: 'rose' },
+    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={20} />, color: 'from-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.4)', text: 'yellow' },
+    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={20} />, color: 'from-cyan-300 to-blue-500', glow: 'rgba(103, 232, 249, 0.4)', text: 'cyan' },
+    { id: 'Night', label: 'Midnight City', icon: <Moon size={20} />, color: 'from-violet-400 to-purple-800', glow: 'rgba(167, 139, 250, 0.4)', text: 'violet' },
+    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={20} />, color: 'from-emerald-300 to-teal-500', glow: 'rgba(110, 231, 183, 0.4)', text: 'emerald' },
   ];
+
+  // --- Bluetooth/Smartphone Media Session Sync ---
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        album: 'AKIKO Music',
+        artwork: [
+          { src: currentTrack.cover || '', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      setMousePos({ x: (e.clientX / window.innerWidth - 0.5) * 30, y: (e.clientY / window.innerHeight - 0.5) * 30 });
+    };
+    window.addEventListener('mousemove', handleMove);
+    return () => window.removeEventListener('mousemove', handleMove);
+  }, []);
 
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
@@ -77,25 +105,29 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (activeTrackRef.current) {
-      activeTrackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    if (activePlaylist === 'All') {
+      setFilteredTracks(tracks);
+    } else {
+      setFilteredTracks(tracks.filter(t => t.genre === activePlaylist));
     }
-  }, [currentTrack]);
+  }, [tracks, activePlaylist]);
 
   useEffect(() => {
-    let result = [...tracks];
-    if (activePlaylist !== 'All') result = result.filter(t => t.genre === activePlaylist);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(t => t.title?.toLowerCase().includes(q) || t.artist?.toLowerCase().includes(q));
+    if (currentTrack && trackRefs.current[currentTrack.id] && scrollContainerRef.current) {
+      const element = trackRefs.current[currentTrack.id];
+      const container = scrollContainerRef.current;
+      
+      // Calculate centering
+      const containerHalfWidth = container.offsetWidth / 2;
+      const elementHalfWidth = element.offsetWidth / 2;
+      const targetScrollLeft = element.offsetLeft - containerHalfWidth + elementHalfWidth;
+
+      container.scrollTo({
+        left: targetScrollLeft,
+        behavior: 'smooth'
+      });
     }
-    result.sort((a, b) => {
-      if (sortBy === 'title') return (a.title || "").localeCompare(b.title || "");
-      if (sortBy === 'artist') return (a.artist || "").localeCompare(b.artist || "");
-      return 0; 
-    });
-    setFilteredTracks(result);
-  }, [tracks, activePlaylist, searchQuery, sortBy]);
+  }, [currentTrack, filteredTracks]);
 
   const handleTrackClick = (track) => {
     if (currentTrack?.id === track.id) {
@@ -108,46 +140,19 @@ export default function App() {
 
   const handleNext = () => {
     const list = filteredTracks.length > 0 ? filteredTracks : tracks;
+    if (list.length === 0) return;
     const idx = list.findIndex(t => t.id === currentTrack?.id);
-    if (idx !== -1) {
-      setCurrentTrack(list[(idx + 1) % list.length]);
-      setIsPlaying(true);
-    }
+    setCurrentTrack(list[(idx + 1) % list.length]);
+    setIsPlaying(true);
   };
 
   const handlePrev = () => {
     const list = filteredTracks.length > 0 ? filteredTracks : tracks;
+    if (list.length === 0) return;
     const idx = list.findIndex(t => t.id === currentTrack?.id);
-    if (idx !== -1) {
-      setCurrentTrack(list[(idx - 1 + list.length) % list.length]);
-      setIsPlaying(true);
-    }
+    setCurrentTrack(list[(idx - 1 + list.length) % list.length]);
+    setIsPlaying(true);
   };
-
-  // --- Bluetooth/OS Media Session Integration ---
-  useEffect(() => {
-    if ('mediaSession' in navigator && currentTrack) {
-      navigator.mediaSession.metadata = new window.MediaMetadata({
-        title: currentTrack.title || 'Unknown Title',
-        artist: currentTrack.artist || 'Unknown Artist',
-        album: 'Akiko Music',
-        artwork: [
-          { src: currentTrack.cover || '', sizes: '512x512', type: 'image/png' }
-        ]
-      });
-
-      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
-      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
-      navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
-      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
-    }
-  }, [currentTrack, handlePrev, handleNext]);
-
-  useEffect(() => {
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-    }
-  }, [isPlaying]);
 
   useEffect(() => {
     if (currentTrack?.url) {
@@ -155,7 +160,9 @@ export default function App() {
       audio.pause();
       audio.src = currentTrack.url;
       audio.load();
-      if (isPlaying) audio.play().catch(() => setIsPlaying(false));
+      if (isPlaying) {
+        audio.play().catch(() => setIsPlaying(false));
+      }
     }
   }, [currentTrack]);
 
@@ -181,258 +188,258 @@ export default function App() {
 
   const currentPlaylistStyle = playlists.find(p => p.id === activePlaylist) || playlists[0];
 
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full gap-10">
-      <div className="flex items-center gap-3 px-2">
-        <div className={`w-10 h-10 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-2xl flex items-center justify-center shadow-xl ring-2 ring-white/10`}>
-          <Sparkles size={20} className="text-white" />
-        </div>
-        <div className="flex flex-col">
-          <span className="font-black text-lg tracking-tight leading-none text-white">AKIKO</span>
-          <span className="text-[9px] text-neutral-500 font-bold tracking-[0.2em] uppercase mt-1">Music Player</span>
-        </div>
-      </div>
-      
-      <nav className="flex flex-col gap-8 text-sm">
-        <div className="space-y-4">
-          <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Explore</p>
-          <NavItem icon={playlists[0].icon} label={playlists[0].label} active={activePlaylist === 'All'} onClick={() => { setActivePlaylist('All'); setIsMobileMenuOpen(false); }} />
-        </div>
-
-        <div className="space-y-4">
-          <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Moods</p>
-          <div className="space-y-1">
-            {playlists.filter(p => p.id !== 'All').map(p => (
-              <NavItem key={p.id} icon={p.icon} label={p.label} active={activePlaylist === p.id} onClick={() => { setActivePlaylist(p.id); setIsMobileMenuOpen(false); }} colorClass={p.color} />
-            ))}
-          </div>
-        </div>
-      </nav>
-    </div>
-  );
-
   return (
     <div className="flex h-screen bg-[#020202] text-white font-sans overflow-hidden transition-colors duration-1000">
       
       {/* Background Glows */}
-      <div className="fixed inset-0 pointer-events-none transition-all duration-1000 opacity-30" 
-        style={{ backgroundColor: currentPlaylistStyle.glow, filter: 'blur(150px)' }}
+      <div 
+        className="fixed inset-0 blur-[150px] opacity-20 pointer-events-none transition-all duration-1000" 
+        style={{ 
+          background: `radial-gradient(circle at ${50 + mousePos.x}% ${50 + mousePos.y}%, ${currentPlaylistStyle.glow}, transparent 70%)`
+        }}
       />
 
-      {/* Desktop Sidebar */}
-      <aside className="w-64 bg-black/60 backdrop-blur-3xl p-6 hidden lg:flex flex-col border-r border-white/5 z-30 relative">
-        <SidebarContent />
-      </aside>
-
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <aside className="absolute top-0 left-0 w-72 h-full bg-[#0a0a0a] p-6 shadow-2xl border-r border-white/10 animate-slide-in">
-            <button 
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="absolute top-6 right-6 p-2 text-neutral-400 hover:text-white"
-            >
-              <X size={24} />
-            </button>
-            <SidebarContent />
-          </aside>
-        </div>
+      {/* Sidebar Overlay (Mobile) */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] lg:hidden" 
+          onClick={() => setIsSidebarOpen(false)}
+        />
       )}
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 z-20 relative overflow-hidden pb-28 lg:pb-32">
+      {/* Sidebar */}
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 w-72 bg-black/80 lg:bg-black/40 backdrop-blur-3xl p-8 flex flex-col gap-10 border-r border-white/5 z-[110] transition-transform duration-500
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-1000 ring-2 ring-white/10`}>
+              <Sparkles size={28} className="text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black text-2xl tracking-tight leading-none uppercase">AKIKO</span>
+              <span className="text-[10px] text-neutral-500 font-bold tracking-widest uppercase mt-1">Music Player</span>
+            </div>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-neutral-400 hover:text-white">
+            <X size={24} />
+          </button>
+        </div>
         
-        {/* Background Artist Text */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
-          <h2 className="text-[25vw] font-black uppercase whitespace-nowrap leading-none tracking-tighter opacity-[0.03] animate-fade-in text-white">
-            {currentTrack?.artist || "AKIKO"}
-          </h2>
-        </div>
-
-        {/* Header with Mobile Menu Trigger */}
-        <div className="p-4 lg:p-6 lg:px-12 z-20 relative bg-gradient-to-b from-black/50 to-transparent">
-          <header className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center justify-between w-full sm:w-auto gap-4">
-              <div className="flex items-center gap-3">
+        <nav className="flex flex-col gap-8">
+          <div className="space-y-4">
+            <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-4">Collections</p>
+            <div className="space-y-1">
+              {playlists.map(p => (
                 <button 
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="p-2 -ml-2 lg:hidden text-white bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+                  key={p.id}
+                  onClick={() => {
+                    setActivePlaylist(p.id);
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 ${activePlaylist === p.id ? 'bg-white/10 text-white shadow-lg' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
                 >
-                  <Menu size={24} />
+                  <span className={activePlaylist === p.id ? 'text-white' : 'text-neutral-600'}>{p.icon}</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider">{p.label}</span>
                 </button>
-                <div className="flex flex-col lg:flex-row lg:items-center lg:gap-4">
-                  <h1 className="text-lg lg:text-2xl font-black tracking-tighter">
-                    {currentPlaylistStyle.label}
-                  </h1>
-                  <span className={`text-xs lg:text-lg bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic font-black`}>
-                    / Collection
-                  </span>
-                </div>
-              </div>
+              ))}
             </div>
+          </div>
+        </nav>
+      </aside>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-40 lg:w-56">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={12} />
-                <input 
-                  type="text" 
-                  placeholder="Quick search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-9 pr-4 text-[11px] focus:outline-none focus:ring-1 focus:ring-white/20 transition-all backdrop-blur-xl"
-                />
-              </div>
-              <button onClick={() => setSortBy(sortBy === 'title' ? 'newest' : 'title')} className="p-2.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all">
-                <ArrowUpDown size={14} className={sortBy === 'title' ? 'text-white' : 'text-neutral-500'} />
-              </button>
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col relative z-10 overflow-hidden">
+        
+        {/* Header */}
+        <header className="px-6 lg:px-12 pt-6 lg:pt-8 flex items-end justify-between shrink-0">
+          <div className="flex items-center gap-6 animate-slide-in">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-3 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+            <div>
+              <h1 className="text-2xl lg:text-5xl font-black tracking-tighter leading-none mb-2 truncate max-w-[200px] lg:max-w-none">
+                {currentPlaylistStyle.label}
+              </h1>
+              <div className={`h-1 w-10 lg:w-16 bg-gradient-to-r ${currentPlaylistStyle.color} rounded-full shadow-lg shadow-white/5`} />
             </div>
-          </header>
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500 hidden sm:block pb-1">
+            {filteredTracks.length} TRACKS
+          </p>
+        </header>
+
+        {/* Artist Background Text */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none -z-10 overflow-hidden">
+          <span className="text-[25vw] font-black opacity-[0.03] uppercase tracking-tighter transition-all duration-1000 whitespace-nowrap">
+            {currentTrack?.artist || "AKIKO"}
+          </span>
         </div>
 
-        {/* Scrollable Tracks */}
-        <div className="relative flex-1 flex flex-col justify-center min-h-0 z-10">
+        {/* Horizontal Track Slider */}
+        <div className="flex-1 flex items-center relative min-h-0">
           <div 
             ref={scrollContainerRef}
-            className="flex gap-6 lg:gap-12 px-6 lg:px-24 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory h-full items-center"
+            className="flex items-center gap-8 lg:gap-12 px-[30vw] lg:px-[40vw] overflow-x-auto no-scrollbar py-8 snap-x snap-mandatory h-full"
+            style={{ scrollBehavior: 'smooth' }}
           >
-            {filteredTracks.map(track => {
-              const isActive = currentTrack?.id === track.id;
-              return (
-                <div 
-                  key={track.id} 
-                  ref={isActive ? activeTrackRef : null}
-                  onClick={() => handleTrackClick(track)}
-                  className="flex-none w-60 sm:w-64 lg:w-72 snap-center group/card cursor-pointer relative"
-                >
-                  <div className={`absolute -inset-6 bg-gradient-to-tr ${currentPlaylistStyle.color} blur-[60px] opacity-0 transition-opacity duration-700 pointer-events-none rounded-full ${isActive && isPlaying ? 'opacity-20 animate-pulse-slow' : ''}`} />
-                  
-                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-[2rem] transition-all duration-500 ${isActive ? 'scale-105 shadow-2xl ring-2 ring-white/30' : 'opacity-60 hover:opacity-100 hover:scale-102 ring-1 ring-white/10'}`}>
-                    {track.cover ? (
-                      <img src={track.cover} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110" />
-                    ) : (
-                      <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={30} className="text-neutral-700" /></div>
-                    )}
-                    
-                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300 ${isActive && isPlaying ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100'}`}>
-                      <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 shadow-xl">
-                        {isActive && isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} className="ml-1" />}
-                      </div>
-                    </div>
-
-                    <div className="absolute inset-x-0 bottom-0 p-5 lg:p-7 bg-gradient-to-t from-black via-black/60 to-transparent">
-                       <h3 className="font-black truncate text-base lg:text-lg tracking-tight text-white mb-0.5">
-                        {track.title}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest truncate">
+            {loading ? (
+              <div className="w-16 h-16 border-t-2 border-white rounded-full animate-spin mx-auto" />
+            ) : (
+              filteredTracks.map(track => {
+                const isActive = currentTrack?.id === track.id;
+                return (
+                  <div 
+                    key={track.id}
+                    ref={el => trackRefs.current[track.id] = el}
+                    onClick={() => handleTrackClick(track)}
+                    className={`relative flex-shrink-0 transition-all duration-700 ease-out snap-center cursor-pointer
+                      ${isActive ? 'w-[260px] lg:w-[320px] scale-100 opacity-100' : 'w-[160px] lg:w-[220px] scale-80 opacity-30 hover:opacity-60 hover:scale-85'}
+                    `}
+                  >
+                    <div className={`relative aspect-square rounded-[2rem] lg:rounded-[2.5rem] overflow-hidden shadow-2xl transition-all duration-700 ${isActive ? 'ring-4 ring-white/20 shadow-[0_40px_80px_rgba(0,0,0,0.7)]' : 'ring-1 ring-white/5'}`}>
+                      {track.cover ? (
+                        <img src={track.cover} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                        <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={48} className="text-neutral-800" /></div>
+                      )}
+                      
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent flex flex-col justify-end p-6 lg:p-8">
+                        <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-2 transition-all duration-700 ${isActive ? 'text-white' : 'text-white/60'}`}>
                           {track.artist}
                         </p>
+                        <h3 className={`font-black tracking-tight leading-tight transition-all duration-700 truncate ${isActive ? 'text-xl lg:text-2xl' : 'text-base lg:text-lg'}`}>
+                          {track.title}
+                        </h3>
+                        
+                        {isActive && isPlaying && (
+                          <div className="mt-4 flex gap-1 h-4 items-end">
+                            {[1, 2, 3, 4].map(i => (
+                              <div key={i} className={`w-1 bg-white rounded-full animate-fake-bounce`} style={{ animationDelay: `${i * 0.15}s`, height: '100%' }} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={`absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity duration-300 ${isActive ? '' : 'hover:opacity-100'}`}>
+                        <div className="w-14 h-14 bg-white/20 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/20">
+                          {isActive && isPlaying ? <Pause fill="white" size={20} /> : <Play fill="white" size={20} className="ml-1" />}
+                        </div>
                       </div>
                     </div>
+
+                    {isActive && (
+                       <div className={`absolute -inset-8 bg-gradient-to-tr ${currentPlaylistStyle.color} blur-[80px] opacity-20 -z-10 animate-pulse-slow`} />
+                    )}
                   </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Nav Buttons (Hidden on Mobile) */}
+          <button 
+            onClick={handlePrev}
+            className="absolute left-10 w-14 h-14 bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full hidden lg:flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-20"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <button 
+            onClick={handleNext}
+            className="absolute right-10 w-14 h-14 bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full hidden lg:flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-20"
+          >
+            <ChevronRight size={24} />
+          </button>
+        </div>
+
+        {/* Player Controls Bar */}
+        <footer className="h-20 lg:h-28 px-4 lg:px-10 flex items-center justify-between bg-black/60 lg:bg-black/40 backdrop-blur-3xl mx-2 lg:mx-8 mb-4 lg:mb-8 rounded-[1.5rem] lg:rounded-[2.5rem] border border-white/10 shadow-2xl shrink-0 z-50">
+          <div className="w-[30%] lg:w-1/3 flex items-center gap-3">
+             {currentTrack && (
+               <>
+                 <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl overflow-hidden hidden sm:block ring-1 ring-white/10 flex-shrink-0">
+                    <img src={currentTrack.cover} alt="" className="w-full h-full object-cover" />
+                 </div>
+                 <div className="flex flex-col min-w-0">
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-0.5 truncate">NOW PLAYING</span>
+                    <span className="text-xs lg:text-lg font-black truncate text-white leading-none">{currentTrack.title}</span>
+                 </div>
+               </>
+             )}
+          </div>
+
+          <div className="flex flex-col items-center gap-1 lg:gap-3 w-[40%] lg:w-1/3">
+             <div className="flex items-center gap-4 lg:gap-8">
+                <button onClick={handlePrev} className="text-neutral-500 hover:text-white active:scale-90"><SkipBack size={16} lg:size={18} fill="currentColor" /></button>
+                <button 
+                  onClick={() => setIsPlaying(!isPlaying)} 
+                  className={`w-10 h-10 lg:w-12 lg:h-12 bg-white text-black rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-90 shadow-xl shadow-white/10`}
+                >
+                  {isPlaying ? <Pause size={18} lg:size={20} fill="black" /> : <Play size={18} lg:size={20} fill="black" className="ml-0.5" />}
+                </button>
+                <button onClick={handleNext} className="text-neutral-500 hover:text-white active:scale-90"><SkipForward size={16} lg:size={18} fill="currentColor" /></button>
+             </div>
+             
+             <div className="w-full max-w-[200px] lg:max-w-xs flex items-center gap-2 lg:gap-3">
+                <span className="text-[8px] font-black text-neutral-600 tabular-nums">
+                  {Math.floor(audioRef.current.currentTime / 60)}:{String(Math.floor(audioRef.current.currentTime % 60)).padStart(2, '0')}
+                </span>
+                <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                   <div className={`h-full bg-gradient-to-r ${currentPlaylistStyle.color} transition-all duration-300`} style={{ width: `${progress}%` }} />
                 </div>
-              );
-            })}
-            
-            {filteredTracks.length === 0 && (
-              <div className="w-full flex flex-col items-center justify-center text-neutral-600 gap-4 opacity-30">
-                <Ghost size={48} />
-                <p className="font-bold uppercase tracking-widest text-xs">No tracks found</p>
-              </div>
-            )}
-            <div className="flex-none w-20 h-full" />
+                <span className="text-[8px] font-black text-neutral-600 tabular-nums">
+                  {audioRef.current.duration ? `${Math.floor(audioRef.current.duration / 60)}:${String(Math.floor(audioRef.current.duration % 60)).padStart(2, '0')}` : '0:00'}
+                </span>
+             </div>
           </div>
-        </div>
+
+          <div className="w-[30%] lg:w-1/3 flex justify-end items-center">
+             <div className="hidden md:flex items-center gap-3">
+                <Volume2 size={16} className="text-neutral-600" />
+                <div className="w-16 lg:w-20 h-1 bg-white/5 rounded-full relative group overflow-hidden">
+                   <input 
+                    type="range" min="0" max="1" step="0.01" value={volume} 
+                    onChange={(e) => setVolume(parseFloat(e.target.value))}
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                   />
+                   <div className="h-full bg-white/30 group-hover:bg-white transition-colors" style={{ width: `${volume * 100}%` }} />
+                </div>
+             </div>
+             {/* Mobile Volume Icon Only */}
+             <div className="md:hidden text-neutral-500">
+               <Volume2 size={16} />
+             </div>
+          </div>
+        </footer>
+
       </main>
-
-      {/* Responsive Player Footer */}
-      <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-4xl h-16 sm:h-20 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-3xl sm:rounded-full px-4 sm:px-8 flex items-center justify-between z-50 shadow-2xl ring-1 ring-white/5">
-        
-        <div className="flex items-center gap-3 w-1/4 sm:w-1/3">
-          {currentTrack && (
-            <>
-              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl overflow-hidden shadow-lg ring-1 ring-white/10 shrink-0">
-                <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />
-              </div>
-              <div className="hidden sm:block overflow-hidden">
-                <p className="text-[12px] font-black truncate text-white leading-tight">{currentTrack.title}</p>
-                <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">{currentTrack.artist}</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center gap-1 flex-1 max-w-sm">
-          <div className="flex items-center gap-4 sm:gap-8">
-            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipBack size={16} fill="currentColor" /></button>
-            <button 
-              onClick={() => setIsPlaying(!isPlaying)} 
-              className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition shadow-lg shadow-white/10"
-            >
-              {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" className="ml-0.5" />}
-            </button>
-            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipForward size={16} fill="currentColor" /></button>
-          </div>
-          
-          <div className="w-full flex items-center gap-2">
-            <span className="text-[8px] font-bold text-neutral-500 w-8 text-right tabular-nums">
-              {Math.floor(audioRef.current.currentTime / 60)}:{String(Math.floor(audioRef.current.currentTime % 60)).padStart(2, '0')}
-            </span>
-            <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden relative">
-              <div className={`h-full rounded-full bg-white/60 transition-all duration-300`} style={{ width: `${progress}%` }} />
-            </div>
-            <span className="text-[8px] font-bold text-neutral-500 w-8 tabular-nums">
-              {audioRef.current.duration ? `${Math.floor(audioRef.current.duration / 60)}:${String(Math.floor(audioRef.current.duration % 60)).padStart(2, '0')}` : '0:00'}
-            </span>
-          </div>
-        </div>
-
-        <div className="w-1/4 sm:w-1/3 flex justify-end">
-          <div className="hidden sm:flex items-center gap-2 w-24">
-            <Volume2 size={14} className="text-neutral-600" />
-            <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden">
-               <div className="bg-white/40 h-full rounded-full" style={{ width: `${volume * 100}%` }} />
-            </div>
-          </div>
-          <div className="sm:hidden">
-            {isPlaying && (
-              <div className="flex gap-0.5 items-end h-3">
-                {[0.4, 0.8, 0.5].map((d, i) => (
-                  <div key={i} className="w-0.5 bg-white/60 rounded-full animate-bar-dance" style={{ animationDelay: `${d}s` }} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </footer>
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 0.03; transform: scale(1); } }
-        @keyframes bar-dance { 0%, 100% { height: 4px; } 50% { height: 12px; } }
-        @keyframes pulse-slow { 0%, 100% { transform: scale(1); opacity: 0.2; } 50% { transform: scale(1.05); opacity: 0.3; } }
-        @keyframes slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-        .animate-fade-in { animation: fade-in 2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-bar-dance { animation: bar-dance 1s ease-in-out infinite; }
-        .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
-        .animate-slide-in { animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        @keyframes fake-bounce {
+          0%, 100% { height: 4px; }
+          50% { height: 100%; }
+        }
+        .animate-fake-bounce { animation: fake-bounce 0.8s ease-in-out infinite; }
+        
+        @keyframes slide-in {
+          from { transform: translateY(15px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-in { animation: slide-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        @keyframes pulse-slow {
+          0%, 100% { transform: scale(1); opacity: 0.1; }
+          50% { transform: scale(1.1); opacity: 0.25; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 5s ease-in-out infinite; }
       `}</style>
-    </div>
-  );
-}
-
-function NavItem({ icon, label, active = false, onClick, colorClass = "from-fuchsia-600 to-violet-600" }) {
-  return (
-    <div 
-      onClick={onClick}
-      className={`flex items-center justify-between px-4 py-3.5 cursor-pointer transition-all duration-300 rounded-2xl group ${active ? 'bg-white/10 text-white shadow-lg ring-1 ring-white/10' : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/5'}`}
-    >
-      <div className="flex items-center gap-4">
-        <div className={`transition-all duration-300 ${active ? 'scale-110 text-white' : 'group-hover:scale-105'}`}>{icon}</div>
-        <span className={`font-bold uppercase tracking-widest text-[11px] ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>
-      </div>
     </div>
   );
 }
