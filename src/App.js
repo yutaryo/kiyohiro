@@ -272,7 +272,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* モバイルで非表示にする検索バーとソートボタン */}
+            <div className="hidden sm:flex items-center gap-3 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-40 lg:w-56">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={12} />
                 <input 
@@ -364,7 +365,8 @@ export default function App() {
         </div>
 
         <div className="flex flex-col items-center gap-1 flex-1 max-w-sm">
-          <div className="flex items-center gap-4 sm:gap-8">
+          {/* モバイルで非表示にするプレイヤー中央のボタン群 */}
+          <div className="hidden sm:flex items-center gap-4 sm:gap-8">
             <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipBack size={16} fill="currentColor" /></button>
             <button 
               onClick={() => setIsPlaying(!isPlaying)} 
