@@ -24,12 +24,14 @@ const appId = 'firebeat-prod-v1';
 export default function App() {
   const [user, setUser] = useState(null);
   const [tracks, setTracks] = useState([]);
+  const [filteredTracks, setFilteredTracks] = useState([]);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isSynced, setIsSynced] = useState(false);
   const [volume, setVolume] = useState(70);
+  const [activePlaylist, setActivePlaylist] = useState('All');
   
   const audioRef = useRef(new Audio());
 
@@ -58,6 +60,17 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // 3. Filtering Logic by Playlist
+  useEffect(() => {
+    if (activePlaylist === 'All') {
+      setFilteredTracks(tracks);
+    } else {
+      // track.genre または track.playlist フィールドに基づいてフィルタリング
+      const filtered = tracks.filter(t => t.genre === activePlaylist || t.playlist === activePlaylist);
+      setFilteredTracks(filtered);
+    }
+  }, [tracks, activePlaylist]);
+
   // --- Rich Results (JSON-LD) ---
   useEffect(() => {
     if (!currentTrack) return;
@@ -82,32 +95,31 @@ export default function App() {
     script.text = JSON.stringify(structuredData);
   }, [currentTrack]);
 
-  // 3. Audio Control Logic
+  // 4. Audio Control Logic
   const togglePlay = () => setIsPlaying(!isPlaying);
 
-  // ジャケット写真クリック時のロジック（ここを修正しました）
   const handleTrackClick = (track) => {
     if (currentTrack?.id === track.id) {
-      // 同じ曲なら再生/停止を切り替える
       setIsPlaying(!isPlaying);
     } else {
-      // 別の曲なら新しく再生を開始する
       setCurrentTrack(track);
       setIsPlaying(true);
     }
   };
 
   const handleNext = () => {
-    if (tracks.length === 0) return;
-    const idx = tracks.findIndex(t => t.id === currentTrack?.id);
-    setCurrentTrack(tracks[(idx + 1) % tracks.length]);
+    const list = filteredTracks.length > 0 ? filteredTracks : tracks;
+    if (list.length === 0) return;
+    const idx = list.findIndex(t => t.id === currentTrack?.id);
+    setCurrentTrack(list[(idx + 1) % list.length]);
     setIsPlaying(true);
   };
 
   const handlePrev = () => {
-    if (tracks.length === 0) return;
-    const idx = tracks.findIndex(t => t.id === currentTrack?.id);
-    setCurrentTrack(tracks[(idx - 1 + tracks.length) % tracks.length]);
+    const list = filteredTracks.length > 0 ? filteredTracks : tracks;
+    if (list.length === 0) return;
+    const idx = list.findIndex(t => t.id === currentTrack?.id);
+    setCurrentTrack(list[(idx - 1 + list.length) % list.length]);
     setIsPlaying(true);
   };
 
@@ -132,7 +144,7 @@ export default function App() {
       audio.removeEventListener('timeupdate', up);
       audio.removeEventListener('ended', handleNext);
     };
-  }, [tracks, currentTrack, volume]);
+  }, [tracks, currentTrack, volume, filteredTracks]);
 
   return (
     <div className="flex h-screen bg-black text-zinc-100 overflow-hidden font-['Inter'] selection:bg-indigo-500/30">
@@ -146,19 +158,51 @@ export default function App() {
       </div>
 
       {/* サイドバー */}
-      <aside className="w-64 bg-black/60 backdrop-blur-2xl p-6 hidden lg:flex flex-col gap-10 border-r border-white/5 z-20">
+      <aside className="w-64 bg-black/60 backdrop-blur-2xl p-6 hidden lg:flex flex-col gap-10 border-r border-white/5 z-20 overflow-y-auto">
         <div className="flex items-center gap-3 px-2">
           <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center shadow-xl shadow-indigo-600/20">
             <Music size={20} className="text-white" />
           </div>
           <span className="font-black text-xl tracking-tighter italic">FIREBEAT</span>
         </div>
+        
         <nav className="space-y-8">
           <div className="space-y-3">
             <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] px-3">Discover</p>
-            <NavItem icon={<Home size={18} />} label="Home" active />
-            <NavItem icon={<Disc size={18} />} label="Explore" />
-            <NavItem icon={<Library size={18} />} label="Library" />
+            <NavItem 
+              icon={<Home size={18} />} 
+              label="All Songs" 
+              active={activePlaylist === 'All'} 
+              onClick={() => setActivePlaylist('All')}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] px-3">Playlists</p>
+            <NavItem 
+              icon={<ListMusic size={18} />} 
+              label="Chill Beats" 
+              active={activePlaylist === 'Chill'} 
+              onClick={() => setActivePlaylist('Chill')}
+            />
+            <NavItem 
+              icon={<ListMusic size={18} />} 
+              label="Energy Mix" 
+              active={activePlaylist === 'Energy'} 
+              onClick={() => setActivePlaylist('Energy')}
+            />
+            <NavItem 
+              icon={<ListMusic size={18} />} 
+              label="Focus Mode" 
+              active={activePlaylist === 'Focus'} 
+              onClick={() => setActivePlaylist('Focus')}
+            />
+          </div>
+          
+          <div className="space-y-3">
+            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] px-3">Library</p>
+            <NavItem icon={<Heart size={18} />} label="Favorites" />
+            <NavItem icon={<Library size={18} />} label="Albums" />
           </div>
         </nav>
       </aside>
@@ -168,10 +212,10 @@ export default function App() {
         <header className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6 mb-12">
           <div>
             <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase mb-2">
-              Deep <span className="text-indigo-500 italic">Dark</span>
+              {activePlaylist === 'All' ? 'Your' : activePlaylist} <span className="text-indigo-500 italic">{activePlaylist === 'All' ? 'Collection' : 'Vibe'}</span>
             </h1>
             <p className="text-zinc-500 text-[10px] font-black tracking-[0.3em] uppercase opacity-70">
-              Aesthetic Audio Experience.
+              {filteredTracks.length} tracks found in this view.
             </p>
           </div>
         </header>
@@ -182,7 +226,7 @@ export default function App() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-6">
-            {tracks.map(track => (
+            {filteredTracks.map(track => (
               <div 
                 key={track.id} 
                 onClick={() => handleTrackClick(track)}
@@ -263,10 +307,13 @@ export default function App() {
   );
 }
 
-function NavItem({ icon, label, active = false }) {
+function NavItem({ icon, label, active = false, onClick }) {
   return (
-    <div className={`flex items-center gap-3.5 py-1.5 px-3 cursor-pointer transition-all duration-300 rounded-xl group ${active ? 'bg-white/5 text-white shadow-sm' : 'text-zinc-600 hover:text-zinc-300'}`}>
-      <div className={`transition-all duration-300 ${active ? 'text-indigo-500' : 'group-hover:text-zinc-300'}`}>
+    <div 
+      onClick={onClick}
+      className={`flex items-center gap-3.5 py-1.5 px-3 cursor-pointer transition-all duration-300 rounded-xl group ${active ? 'bg-indigo-500/20 text-white shadow-sm ring-1 ring-indigo-500/30' : 'text-zinc-600 hover:text-zinc-300 hover:bg-white/5'}`}
+    >
+      <div className={`transition-all duration-300 ${active ? 'text-indigo-400' : 'group-hover:text-zinc-300'}`}>
         {icon}
       </div>
       <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${active ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}>{label}</span>
