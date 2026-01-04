@@ -3,8 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, Library, ListMusic, Sparkles, Heart, Mic2, Search, Filter, MoreVertical, LayoutGrid, PlusSquare, Waves, Moon, Zap, Coffee, Ghost, AlertCircle, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getFirestore, collection, onSnapshot, query } from 'firebase/firestore';
+import { 
+  Play, Pause, SkipBack, SkipForward, Volume2, Music, Home, 
+  Sparkles, Search, ArrowUpDown, Menu, X, Ghost, 
+  Waves, Moon, Zap, Coffee 
+} from 'lucide-react';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -34,18 +38,19 @@ export default function App() {
   const [activePlaylist, setActivePlaylist] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const audioRef = useRef(new Audio());
   const scrollContainerRef = useRef(null);
   const activeTrackRef = useRef(null);
 
   const playlists = [
-    { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'from-fuchsia-400 to-indigo-500', glow: 'rgba(192, 38, 211, 0.4)', text: 'fuchsia' },
-    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'from-rose-400 to-pink-600', glow: 'rgba(251, 113, 133, 0.4)', text: 'rose' },
-    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={18} />, color: 'from-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.4)', text: 'yellow' },
-    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={18} />, color: 'from-cyan-300 to-blue-500', glow: 'rgba(103, 232, 249, 0.4)', text: 'cyan' },
-    { id: 'Night', label: 'Midnight City', icon: <Moon size={18} />, color: 'from-violet-400 to-purple-800', glow: 'rgba(167, 139, 250, 0.4)', text: 'violet' },
-    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'from-emerald-300 to-teal-500', glow: 'rgba(110, 231, 183, 0.4)', text: 'emerald' },
+    { id: 'All', label: 'All Songs', icon: <Home size={20} />, color: 'from-fuchsia-400 to-indigo-500', glow: 'rgba(192, 38, 211, 0.4)' },
+    { id: 'Chill', label: 'Chill Beats', icon: <Coffee size={18} />, color: 'from-rose-400 to-pink-600', glow: 'rgba(251, 113, 133, 0.4)' },
+    { id: 'Energy', label: 'Energy Mix', icon: <Zap size={18} />, color: 'from-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.4)' },
+    { id: 'Focus', label: 'Focus Mode', icon: <Sparkles size={18} />, color: 'from-cyan-300 to-blue-500', glow: 'rgba(103, 232, 249, 0.4)' },
+    { id: 'Night', label: 'Midnight City', icon: <Moon size={18} />, color: 'from-violet-400 to-purple-800', glow: 'rgba(167, 139, 250, 0.4)' },
+    { id: 'Nature', label: 'Nature Sounds', icon: <Waves size={18} />, color: 'from-emerald-300 to-teal-500', glow: 'rgba(110, 231, 183, 0.4)' },
   ];
 
   useEffect(() => {
@@ -73,11 +78,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeTrackRef.current) {
-      activeTrackRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'center'
-      });
+      activeTrackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     }
   }, [currentTrack]);
 
@@ -155,6 +156,36 @@ export default function App() {
 
   const currentPlaylistStyle = playlists.find(p => p.id === activePlaylist) || playlists[0];
 
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full gap-10">
+      <div className="flex items-center gap-3 px-2">
+        <div className={`w-10 h-10 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-2xl flex items-center justify-center shadow-xl ring-2 ring-white/10`}>
+          <Sparkles size={20} className="text-white" />
+        </div>
+        <div className="flex flex-col">
+          <span className="font-black text-lg tracking-tight leading-none text-white">AKIKO</span>
+          <span className="text-[9px] text-neutral-500 font-bold tracking-[0.2em] uppercase mt-1">Music Player</span>
+        </div>
+      </div>
+      
+      <nav className="flex flex-col gap-8 text-sm">
+        <div className="space-y-4">
+          <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Explore</p>
+          <NavItem icon={playlists[0].icon} label={playlists[0].label} active={activePlaylist === 'All'} onClick={() => { setActivePlaylist('All'); setIsMobileMenuOpen(false); }} />
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Moods</p>
+          <div className="space-y-1">
+            {playlists.filter(p => p.id !== 'All').map(p => (
+              <NavItem key={p.id} icon={p.icon} label={p.label} active={activePlaylist === p.id} onClick={() => { setActivePlaylist(p.id); setIsMobileMenuOpen(false); }} colorClass={p.color} />
+            ))}
+          </div>
+        </div>
+      </nav>
+    </div>
+  );
+
   return (
     <div className="flex h-screen bg-[#020202] text-white font-sans overflow-hidden transition-colors duration-1000">
       
@@ -163,37 +194,29 @@ export default function App() {
         style={{ backgroundColor: currentPlaylistStyle.glow, filter: 'blur(150px)' }}
       />
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-black/60 backdrop-blur-3xl p-6 flex flex-col gap-10 hidden lg:flex border-r border-white/5 z-30 relative">
-        <div className="flex items-center gap-3 px-2">
-          <div className={`w-10 h-10 bg-gradient-to-tr ${currentPlaylistStyle.color} rounded-2xl flex items-center justify-center shadow-xl ring-2 ring-white/10`}>
-            <Sparkles size={20} className="text-white" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-black text-lg tracking-tight leading-none">AKIKO</span>
-            <span className="text-[9px] text-neutral-500 font-bold tracking-[0.2em] uppercase mt-1">Music Player</span>
-          </div>
-        </div>
-        
-        <nav className="flex flex-col gap-8 text-sm">
-          <div className="space-y-4">
-            <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Explore</p>
-            <NavItem icon={playlists[0].icon} label={playlists[0].label} active={activePlaylist === 'All'} onClick={() => setActivePlaylist('All')} />
-          </div>
-
-          <div className="space-y-4">
-            <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] px-3">Moods</p>
-            <div className="space-y-1">
-              {playlists.filter(p => p.id !== 'All').map(p => (
-                <NavItem key={p.id} icon={p.icon} label={p.label} active={activePlaylist === p.id} onClick={() => setActivePlaylist(p.id)} colorClass={p.color} />
-              ))}
-            </div>
-          </div>
-        </nav>
+      {/* Desktop Sidebar */}
+      <aside className="w-64 bg-black/60 backdrop-blur-3xl p-6 hidden lg:flex flex-col border-r border-white/5 z-30 relative">
+        <SidebarContent />
       </aside>
 
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+          <aside className="absolute top-0 left-0 w-72 h-full bg-[#0a0a0a] p-6 shadow-2xl border-r border-white/10 animate-slide-in">
+            <button 
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="absolute top-6 right-6 p-2 text-neutral-400 hover:text-white"
+            >
+              <X size={24} />
+            </button>
+            <SidebarContent />
+          </aside>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 z-20 relative overflow-hidden pb-24 lg:pb-32">
+      <main className="flex-1 flex flex-col min-w-0 z-20 relative overflow-hidden pb-28 lg:pb-32">
         
         {/* Background Artist Text */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
@@ -202,41 +225,53 @@ export default function App() {
           </h2>
         </div>
 
-        {/* Compact Header */}
+        {/* Header with Mobile Menu Trigger */}
         <div className="p-4 lg:p-6 lg:px-12 z-20 relative bg-gradient-to-b from-black/50 to-transparent">
-          <header className="flex flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl lg:text-2xl font-black tracking-tighter">
-                {currentPlaylistStyle.label}
-              </h1>
-              <span className={`text-md lg:text-lg bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic font-black`}>
-                / Collection
-              </span>
+          <header className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="p-2 -ml-2 lg:hidden text-white bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  <Menu size={24} />
+                </button>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:gap-4">
+                  <h1 className="text-lg lg:text-2xl font-black tracking-tighter">
+                    {currentPlaylistStyle.label}
+                  </h1>
+                  <span className={`text-xs lg:text-lg bg-clip-text text-transparent bg-gradient-to-r ${currentPlaylistStyle.color} italic font-black`}>
+                    / Collection
+                  </span>
+                </div>
+              </div>
+
+              {/* Mobile Quick Search Icon or Similar could go here */}
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative w-40 lg:w-56">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-40 lg:w-56">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={12} />
                 <input 
                   type="text" 
                   placeholder="Quick search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-full py-1.5 pl-8 pr-4 text-[10px] focus:outline-none focus:ring-1 focus:ring-white/20 transition-all backdrop-blur-xl"
+                  className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-9 pr-4 text-[11px] focus:outline-none focus:ring-1 focus:ring-white/20 transition-all backdrop-blur-xl"
                 />
               </div>
-              <button onClick={() => setSortBy(sortBy === 'title' ? 'newest' : 'title')} className="p-2 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all">
-                <ArrowUpDown size={12} className={sortBy === 'title' ? 'text-white' : 'text-neutral-500'} />
+              <button onClick={() => setSortBy(sortBy === 'title' ? 'newest' : 'title')} className="p-2.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all">
+                <ArrowUpDown size={14} className={sortBy === 'title' ? 'text-white' : 'text-neutral-500'} />
               </button>
             </div>
           </header>
         </div>
 
-        {/* Scrollable Tracks - Smaller Card Size */}
+        {/* Scrollable Tracks */}
         <div className="relative flex-1 flex flex-col justify-center min-h-0 z-10">
           <div 
             ref={scrollContainerRef}
-            className="flex gap-8 lg:gap-12 px-10 lg:px-24 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory h-full items-center"
+            className="flex gap-6 lg:gap-12 px-6 lg:px-24 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory h-full items-center"
           >
             {filteredTracks.map(track => {
               const isActive = currentTrack?.id === track.id;
@@ -245,42 +280,31 @@ export default function App() {
                   key={track.id} 
                   ref={isActive ? activeTrackRef : null}
                   onClick={() => handleTrackClick(track)}
-                  className="flex-none w-52 lg:w-72 snap-center group/card cursor-pointer relative"
+                  className="flex-none w-60 sm:w-64 lg:w-72 snap-center group/card cursor-pointer relative"
                 >
-                  {/* Compact Glow */}
                   <div className={`absolute -inset-6 bg-gradient-to-tr ${currentPlaylistStyle.color} blur-[60px] opacity-0 transition-opacity duration-700 pointer-events-none rounded-full ${isActive && isPlaying ? 'opacity-20 animate-pulse-slow' : ''}`} />
                   
-                  {/* Square Card (1:1) - Reduced Size */}
-                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-3xl transition-all duration-500 ${isActive ? 'scale-105 shadow-2xl ring-2 ring-white/30' : 'opacity-60 hover:opacity-100 hover:scale-102 ring-1 ring-white/10'}`}>
+                  <div className={`relative z-10 aspect-square w-full overflow-hidden rounded-[2rem] transition-all duration-500 ${isActive ? 'scale-105 shadow-2xl ring-2 ring-white/30' : 'opacity-60 hover:opacity-100 hover:scale-102 ring-1 ring-white/10'}`}>
                     {track.cover ? (
                       <img src={track.cover} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110" />
                     ) : (
                       <div className="w-full h-full bg-neutral-900 flex items-center justify-center"><Music size={30} className="text-neutral-700" /></div>
                     )}
                     
-                    {/* Overlay Player Interface */}
                     <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300 ${isActive && isPlaying ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100'}`}>
                       <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 shadow-xl">
                         {isActive && isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} className="ml-1" />}
                       </div>
                     </div>
 
-                    {/* Compact Overlay Info */}
-                    <div className="absolute inset-x-0 bottom-0 p-5 lg:p-6 bg-gradient-to-t from-black via-black/50 to-transparent">
-                       <h3 className="font-black truncate text-sm lg:text-lg tracking-tight text-white mb-0.5">
+                    <div className="absolute inset-x-0 bottom-0 p-5 lg:p-7 bg-gradient-to-t from-black via-black/60 to-transparent">
+                       <h3 className="font-black truncate text-base lg:text-lg tracking-tight text-white mb-0.5">
                         {track.title}
                       </h3>
                       <div className="flex items-center gap-2">
-                        <p className="text-[9px] lg:text-[10px] text-white/50 font-bold uppercase tracking-widest truncate">
+                        <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest truncate">
                           {track.artist}
                         </p>
-                        {isActive && isPlaying && (
-                          <div className="flex gap-0.5 items-end h-2.5">
-                            {[0.5, 1.0, 0.7].map((d, i) => (
-                              <div key={i} className={`w-0.5 bg-white/80 rounded-full animate-bar-dance`} style={{ animationDelay: `${d}s` }} />
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -291,7 +315,7 @@ export default function App() {
             {filteredTracks.length === 0 && (
               <div className="w-full flex flex-col items-center justify-center text-neutral-600 gap-4 opacity-30">
                 <Ghost size={48} />
-                <p className="font-bold uppercase tracking-widest text-xs">Collection is empty</p>
+                <p className="font-bold uppercase tracking-widest text-xs">No tracks found</p>
               </div>
             )}
             <div className="flex-none w-20 h-full" />
@@ -299,54 +323,64 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer Controls */}
-      <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl h-16 bg-black/70 backdrop-blur-2xl border border-white/10 rounded-full px-6 flex items-center justify-between z-50 shadow-2xl ring-1 ring-white/5">
+      {/* Responsive Player Footer */}
+      <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-4xl h-16 sm:h-20 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-3xl sm:rounded-full px-4 sm:px-8 flex items-center justify-between z-50 shadow-2xl ring-1 ring-white/5">
         
-        <div className="flex items-center gap-4 w-1/4">
+        <div className="flex items-center gap-3 w-1/4 sm:w-1/3">
           {currentTrack && (
             <>
-              <div className="w-9 h-9 rounded-lg overflow-hidden shadow-lg ring-1 ring-white/10 shrink-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl overflow-hidden shadow-lg ring-1 ring-white/10 shrink-0">
                 <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />
               </div>
-              <div className="hidden md:block overflow-hidden">
+              <div className="hidden sm:block overflow-hidden">
                 <p className="text-[12px] font-black truncate text-white leading-tight">{currentTrack.title}</p>
-                <p className="text-[8px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">{currentTrack.artist}</p>
+                <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">{currentTrack.artist}</p>
               </div>
             </>
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-0.5 flex-1 max-w-sm">
-          <div className="flex items-center gap-6">
-            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipBack size={14} fill="currentColor" /></button>
+        <div className="flex flex-col items-center gap-1 flex-1 max-w-sm">
+          <div className="flex items-center gap-4 sm:gap-8">
+            <button onClick={handlePrev} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipBack size={16} fill="currentColor" /></button>
             <button 
               onClick={() => setIsPlaying(!isPlaying)} 
-              className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition"
+              className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition shadow-lg shadow-white/10"
             >
-              {isPlaying ? <Pause size={16} fill="black" /> : <Play size={16} fill="black" className="ml-0.5" />}
+              {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" className="ml-0.5" />}
             </button>
-            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipForward size={14} fill="currentColor" /></button>
+            <button onClick={handleNext} className="text-neutral-500 hover:text-white transition-all active:scale-90"><SkipForward size={16} fill="currentColor" /></button>
           </div>
           
           <div className="w-full flex items-center gap-2">
-            <span className="text-[8px] font-bold text-neutral-500 w-6 text-right tabular-nums">
+            <span className="text-[8px] font-bold text-neutral-500 w-8 text-right tabular-nums">
               {Math.floor(audioRef.current.currentTime / 60)}:{String(Math.floor(audioRef.current.currentTime % 60)).padStart(2, '0')}
             </span>
-            <div className="flex-1 bg-white/5 h-1 rounded-full overflow-hidden relative">
-              <div className={`h-full rounded-full bg-white/40 transition-all duration-300`} style={{ width: `${progress}%` }} />
+            <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden relative">
+              <div className={`h-full rounded-full bg-white/60 transition-all duration-300`} style={{ width: `${progress}%` }} />
             </div>
-            <span className="text-[8px] font-bold text-neutral-500 w-6 tabular-nums">
+            <span className="text-[8px] font-bold text-neutral-500 w-8 tabular-nums">
               {audioRef.current.duration ? `${Math.floor(audioRef.current.duration / 60)}:${String(Math.floor(audioRef.current.duration % 60)).padStart(2, '0')}` : '0:00'}
             </span>
           </div>
         </div>
 
-        <div className="w-1/4 flex justify-end">
-          <div className="flex items-center gap-2 w-20">
-            <Volume2 size={12} className="text-neutral-600" />
-            <div className="flex-1 bg-white/5 h-0.5 rounded-full overflow-hidden">
-               <div className="bg-white/30 h-full rounded-full" style={{ width: `${volume * 100}%` }} />
+        <div className="w-1/4 sm:w-1/3 flex justify-end">
+          <div className="hidden sm:flex items-center gap-2 w-24">
+            <Volume2 size={14} className="text-neutral-600" />
+            <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden">
+               <div className="bg-white/40 h-full rounded-full" style={{ width: `${volume * 100}%` }} />
             </div>
+          </div>
+          {/* Mobile indicator for isPlaying */}
+          <div className="sm:hidden">
+            {isPlaying && (
+              <div className="flex gap-0.5 items-end h-3">
+                {[0.4, 0.8, 0.5].map((d, i) => (
+                  <div key={i} className="w-0.5 bg-white/60 rounded-full animate-bar-dance" style={{ animationDelay: `${d}s` }} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </footer>
@@ -355,11 +389,13 @@ export default function App() {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 0.03; transform: scale(1); } }
-        @keyframes bar-dance { 0%, 100% { height: 4px; } 50% { height: 10px; } }
+        @keyframes bar-dance { 0%, 100% { height: 4px; } 50% { height: 12px; } }
         @keyframes pulse-slow { 0%, 100% { transform: scale(1); opacity: 0.2; } 50% { transform: scale(1.05); opacity: 0.3; } }
+        @keyframes slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
         .animate-fade-in { animation: fade-in 2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-bar-dance { animation: bar-dance 1s ease-in-out infinite; }
         .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+        .animate-slide-in { animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
       `}</style>
     </div>
   );
@@ -369,11 +405,11 @@ function NavItem({ icon, label, active = false, onClick, colorClass = "from-fuch
   return (
     <div 
       onClick={onClick}
-      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-all duration-300 rounded-2xl group ${active ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/5'}`}
+      className={`flex items-center justify-between px-4 py-3.5 cursor-pointer transition-all duration-300 rounded-2xl group ${active ? 'bg-white/10 text-white shadow-lg ring-1 ring-white/10' : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/5'}`}
     >
       <div className="flex items-center gap-4">
-        <div className={`transition-all duration-300 ${active ? 'scale-110' : 'group-hover:scale-105'}`}>{icon}</div>
-        <span className={`font-bold uppercase tracking-widest text-[10px] ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>
+        <div className={`transition-all duration-300 ${active ? 'scale-110 text-white' : 'group-hover:scale-105'}`}>{icon}</div>
+        <span className={`font-bold uppercase tracking-widest text-[11px] ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>
       </div>
     </div>
   );
